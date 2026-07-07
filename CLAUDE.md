@@ -193,6 +193,22 @@ proveedor_items  (id, proveedor, texto_factura, producto_id) -- tabla de
 - **544 sin rubro**: clasificar de a poco (no bloquea).
 - El sistema viejo **sigue operando** hasta que el nuevo esté andando. Trabajar siempre sobre **copia** del DBF, nunca el original.
 
+### Verificado leyendo el DBF real (2026-07-07)
+- Estructura: dBase III, 30 campos, **4.437 registros (0 borrados, 0 duplicados)**. Confirma 84% EAN-13, 81% con costo, **835 con stock negativo**, 38 rubros, 544 sin rubro.
+- **La fecha de última modificación está en el campo `COLOR`** (99,8% con formato `dd/mm/aaaa`), NO en `FECHA` (vacío). Mapear `modificado_en` ← `COLOR`.
+- **Rubros sucios → normalizar** (afecta IVA y mínimos): `SNAKS`→`SNACKS`; `LIMPIEZA`/`ART. LIMPIEZA`/`ART.LIMPIEZ`→`LIMPIEZA`; `CARAMELOS SUELTOS`→`CARAMELOS`; vacío→`SIN RUBRO`.
+- **`GCIA` (margen) poco confiable** (solo 45% cargado): se **calcula** el margen desde venta/costo.
+- **`PROVEEDOR` es basura**: de 614 no vacíos, 577 dicen `COSTO`/`Costo`/`costo`. No migrar proveedor.
+- **`REPOSICION`**: flag de texto (`Reposicion` en 3.142). Por ahora no se migra.
+- **Pesables**: fiambre por kg (códigos internos `1`–`23`), `99`=verdura, `999`=fiambre general, `333`=carne (stock fraccionario, precio por kg). Huevos `0`/`00`/`000`/`0000` son por unidad, no por kg. Requieren revisión manual.
+
+### Artefactos de migración (en el repo)
+- `supabase/migrations/0001_fase1.sql` — schema: `productos`, `usuarios`/roles, `auditoria`, RLS, triggers de auditoría y de permisos por columna.
+- `scripts/migrate-dbf.mjs` — transforma el DBF → seed (read-only sobre el DBF).
+- `supabase/seed/0001_productos_seed.sql` — 4.436 productos listos para insertar.
+- `scripts/crear-admin.mjs` — crea/asciende un admin vía Admin API (lee `.env.local`).
+- `src/lib/supabase/admin.ts`, `src/lib/auth.ts`, `src/lib/actions/usuarios.ts` — gestión de usuarios server-side (crear/borrar/rol), solo admin.
+
 ---
 
 ## 9. Convenciones
@@ -234,4 +250,8 @@ src/middleware.ts               # engancha updateSession en el matcher
 - ✅ `STOCK.DBF` analizado y mapeado.
 - ✅ Decisiones de negocio definidas (IVA por rubro, sin fiado, mínimos por rubro, desvíos por admin, verduras pendiente).
 - ✅ Proyecto scaffoldeado: Next.js 16 + Tailwind 4 + TS, clientes Supabase (`@supabase/ssr`) cableados y conexión verificada. Auth por **Supabase Auth**.
-- ⬜ **Próximo**: shadcn/ui + PWA (manifest/SW), modelo de datos definitivo y migración Fase 1 (DBF + auth/roles). Repo GitHub y deploy Vercel los crea el dueño.
+- ✅ Deploy en Vercel funcionando (proyecto `lodegomez`, público y verificado).
+- ✅ **Fase 1 completa**: schema aplicado (tablas `usuarios`/`productos`/`auditoria` + RLS) y **catálogo cargado (4.436 productos)** en Supabase.
+- ✅ **Primer admin creado** (`alejogomez.mdz14@gmail.com`, rol admin). Gestión de usuarios (crear/borrar/rol) construida como Server Actions, solo admin.
+- ✅ Branding definido: paleta **verde fresco + B&N**, estilo **vintage sobrio** (falta el logo en `public/brand/` para aplicarlo).
+- ⬜ **Próximo**: panel de admin (pantalla de empleados), shadcn/ui + PWA, y el módulo POS (Fase 2). Pendiente del dueño: desactivar registro público en Supabase Auth y dejar el logo en `public/brand/`.
