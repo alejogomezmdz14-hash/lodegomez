@@ -17,6 +17,15 @@ do $$ begin
   create type public.estado_venta as enum ('activa', 'anulada', 'devuelta');
 exception when duplicate_object then null; end $$;
 
+-- === Helper: usuario provisionado (tiene fila en usuarios) ===
+-- Se define acá también para que esta migración sea auto-suficiente aunque no
+-- se haya corrido el patch de endurecimiento. Idempotente (create or replace).
+create or replace function public.es_usuario()
+returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.usuarios where id = auth.uid());
+$$;
+
 -- ============================================================================
 -- ventas
 -- ============================================================================
