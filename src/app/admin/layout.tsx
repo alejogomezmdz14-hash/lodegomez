@@ -20,10 +20,22 @@ export default async function AdminLayout({
         </span>
         <nav className="flex flex-col gap-1">
           <Link
+            href="/admin/panel"
+            className="rounded-lg px-3 py-2 text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-900"
+          >
+            Panel
+          </Link>
+          <Link
             href="/admin/empleados"
             className="rounded-lg px-3 py-2 text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-900"
           >
             Empleados
+          </Link>
+          <Link
+            href="/caja"
+            className="rounded-lg px-3 py-2 text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-900"
+          >
+            ← Volver a cobrar
           </Link>
         </nav>
       </aside>

@@ -27,6 +27,7 @@ export default async function AppLayout({
           <NavLink href="/caja/ventas">Ventas</NavLink>
           <NavLink href="/caja/cierre">Cierre</NavLink>
           <NavLink href="/productos">Productos</NavLink>
+          {esAdmin ? <NavLink href="/admin/panel">Panel</NavLink> : null}
           {esAdmin ? <NavLink href="/admin/empleados">Empleados</NavLink> : null}
         </nav>
         <div className="ml-auto flex items-center gap-3">

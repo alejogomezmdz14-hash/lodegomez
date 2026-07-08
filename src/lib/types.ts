@@ -94,3 +94,35 @@ export type VentaListado = {
   total: number;
   estado: EstadoVenta;
 };
+
+// Dashboard (Etapa 3).
+export type MetricasPeriodo = {
+  total: number;
+  cant_tickets: number;
+  efectivo: number;
+  qr: number;
+  tarjeta: number;
+  transferencia: number;
+  margen: number;
+  anulaciones: number;
+};
+
+export type RankingItem = {
+  codigo: string | null;
+  descripcion: string | null;
+  unidades: number;
+  facturado: number;
+  margen: number;
+};
+
+export type TipoEvento = "anulacion" | "devolucion" | "alerta_precio";
+
+export type EventoDueno = {
+  id: string;
+  tipo: TipoEvento;
+  venta_id: string | null;
+  ticket_nro: number | null;
+  detalle: string | null;
+  leido: boolean;
+  creado_en: string;
+};
