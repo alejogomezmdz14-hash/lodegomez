@@ -11,6 +11,7 @@ import type {
   RankingItem,
   EventoDueno,
   TipoEvento,
+  VentaPorEmpleado,
 } from "@/lib/types";
 
 type Preset = "hoy" | "ayer" | "semana" | "mes";
@@ -56,6 +57,7 @@ export function PanelCliente() {
   const [metricas, setMetricas] = useState<MetricasPeriodo | null>(null);
   const [ranking, setRanking] = useState<RankingItem[]>([]);
   const [eventos, setEventos] = useState<EventoDueno[]>([]);
+  const [porEmpleado, setPorEmpleado] = useState<VentaPorEmpleado[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(false);
 
@@ -64,7 +66,7 @@ export function PanelCliente() {
     const { desde, hasta } = rango(preset);
     (async () => {
       setCargando(true);
-      const [m, r, e] = await Promise.all([
+      const [m, r, e, emp] = await Promise.all([
         supabase.rpc("metricas_periodo", { p_desde: desde, p_hasta: hasta }),
         supabase.rpc("ranking_productos", {
           p_desde: desde,
@@ -76,15 +78,17 @@ export function PanelCliente() {
           .select("*")
           .order("creado_en", { ascending: false })
           .limit(30),
+        supabase.rpc("ventas_por_empleado", { p_desde: desde, p_hasta: hasta }),
       ]);
       if (cancelado) return;
-      if (m.error || r.error || e.error) {
+      if (m.error || r.error || e.error || emp.error) {
         setError(true);
       } else {
         setError(false);
         setMetricas((m.data as MetricasPeriodo | null) ?? null);
         setRanking((r.data as RankingItem[] | null) ?? []);
         setEventos((e.data as EventoDueno[] | null) ?? []);
+        setPorEmpleado((emp.data as VentaPorEmpleado[] | null) ?? []);
       }
       setCargando(false);
     })();
@@ -194,6 +198,35 @@ export function PanelCliente() {
           </table>
         </div>
       </div>
+
+      {/* Ventas por empleado */}
+      {porEmpleado.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium">Ventas por empleado</p>
+          <div className="overflow-x-auto rounded-xl border">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Empleado</th>
+                  <th className="px-4 py-2 text-right font-medium">Tickets</th>
+                  <th className="px-4 py-2 text-right font-medium">Vendido</th>
+                </tr>
+              </thead>
+              <tbody>
+                {porEmpleado.map((e, i) => (
+                  <tr key={i} className="border-b last:border-0">
+                    <td className="px-4 py-2">{e.empleado}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{e.tickets}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">
+                      {pesos(Number(e.total))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
 
       {/* Avisos a dueños */}
       <div className="flex flex-col gap-2">

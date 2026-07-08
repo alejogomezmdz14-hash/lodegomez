@@ -138,3 +138,42 @@ export type EventoDueno = {
   leido: boolean;
   creado_en: string;
 };
+
+// Reposición.
+export type ProductoReponer = {
+  codigo: string;
+  descripcion: string | null;
+  rubro: string | null;
+  stock: number;
+  stock_minimo: number;
+};
+
+export type FaltanteManual = {
+  id: string;
+  texto: string;
+  resuelto: boolean;
+  creado_en: string;
+};
+
+// Historial de cierres.
+export type CierreHistorial = {
+  id: string;
+  creado_en: string;
+  hasta: string;
+  cant_ventas: number;
+  total: number;
+  total_efectivo: number;
+  total_qr: number;
+  total_tarjeta: number;
+  total_transferencia: number;
+  efectivo_contado: number | null;
+  diferencia: number | null;
+  empleado_nombre: string | null;
+};
+
+// Ventas por empleado (dashboard).
+export type VentaPorEmpleado = {
+  empleado: string;
+  tickets: number;
+  total: number;
+};
