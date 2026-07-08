@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
 const FASES = [
@@ -47,6 +48,13 @@ export default async function Home() {
           ? "Supabase conectado"
           : "Supabase sin conexión — revisá .env.local"}
       </div>
+
+      <Link
+        href="/ingresar"
+        className="inline-flex w-fit items-center gap-2 rounded-lg bg-green-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-700"
+      >
+        Ingresar al sistema →
+      </Link>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-widest text-zinc-500">
