@@ -28,3 +28,21 @@ export async function registrarVenta(
   }
   return { ok: true, venta: data as VentaTicket };
 }
+
+export type ResultadoAnular =
+  | { ok: true; ticket_nro: number }
+  | { ok: false; error: string };
+
+// Anula una venta activa (reintegra stock + avisa a los dueños) vía RPC.
+export async function anularVenta(
+  ventaId: string,
+  motivo: string,
+): Promise<ResultadoAnular> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("anular_venta", {
+    p_venta_id: ventaId,
+    p_motivo: motivo.trim() || null,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, ticket_nro: (data as { ticket_nro: number }).ticket_nro };
+}

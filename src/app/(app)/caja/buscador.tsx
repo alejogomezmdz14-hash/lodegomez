@@ -6,18 +6,29 @@ import { Input } from "@/components/ui/input";
 import { pesos } from "@/lib/formato";
 import type { Producto } from "@/lib/types";
 
-export function Buscador({ onElegir }: { onElegir: (p: Producto) => void }) {
-  const [term, setTerm] = useState("");
+// `term` lo controla el padre para poder limpiarlo cuando un scan cae acá.
+export function Buscador({
+  term,
+  onTermChange,
+  onElegir,
+}: {
+  term: string;
+  onTermChange: (t: string) => void;
+  onElegir: (p: Producto) => void;
+}) {
   const [resultados, setResultados] = useState<Producto[]>([]);
   const [buscando, setBuscando] = useState(false);
   const [supabase] = useState(() => createClient());
 
   useEffect(() => {
     const q = term.trim();
+    let cancelado = false;
     const t = setTimeout(async () => {
       if (q.length < 2) {
-        setResultados([]);
-        setBuscando(false);
+        if (!cancelado) {
+          setResultados([]);
+          setBuscando(false);
+        }
         return;
       }
       setBuscando(true);
@@ -27,17 +38,22 @@ export function Buscador({ onElegir }: { onElegir: (p: Producto) => void }) {
         .ilike("descripcion", `%${q}%`)
         .eq("activo", true)
         .limit(20);
-      setResultados((data as Producto[] | null) ?? []);
-      setBuscando(false);
+      if (!cancelado) {
+        setResultados((data as Producto[] | null) ?? []);
+        setBuscando(false);
+      }
     }, 250);
-    return () => clearTimeout(t);
+    return () => {
+      cancelado = true; // descarta la respuesta si el término ya cambió
+      clearTimeout(t);
+    };
   }, [term, supabase]);
 
   return (
     <div className="flex min-h-0 flex-col gap-2">
       <Input
         value={term}
-        onChange={(e) => setTerm(e.target.value)}
+        onChange={(e) => onTermChange(e.target.value)}
         placeholder="Buscar por nombre…"
         className="h-11 text-base"
       />
@@ -47,11 +63,7 @@ export function Buscador({ onElegir }: { onElegir: (p: Producto) => void }) {
             <li key={p.id}>
               <button
                 type="button"
-                onClick={() => {
-                  onElegir(p);
-                  setTerm("");
-                  setResultados([]);
-                }}
+                onClick={() => onElegir(p)}
                 className="flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-accent"
               >
                 <span className="min-w-0 truncate">{p.descripcion}</span>

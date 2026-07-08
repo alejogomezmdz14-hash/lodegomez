@@ -68,3 +68,29 @@ export type VentaTicket = {
   total_iva: number | null;
   items: TicketItem[];
 };
+
+// Resumen del turno (RPCs resumen_caja_actual / cerrar_caja).
+export type ResumenCaja = {
+  id?: string;
+  caja_id: string;
+  desde: string | null;
+  hasta: string;
+  cant_ventas: number;
+  total: number;
+  total_efectivo: number;
+  total_qr: number;
+  total_tarjeta: number;
+  total_transferencia: number;
+  efectivo_contado?: number | null;
+  diferencia?: number | null;
+};
+
+// Fila de la lista de ventas (pantalla de anulación).
+export type VentaListado = {
+  id: string;
+  ticket_nro: number;
+  creada_en: string;
+  medio_pago: MedioPago;
+  total: number;
+  estado: EstadoVenta;
+};

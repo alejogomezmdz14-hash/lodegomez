@@ -20,6 +20,7 @@ export function CajaCliente() {
   const codigoRef = useRef<HTMLInputElement>(null);
 
   const [codigo, setCodigo] = useState("");
+  const [term, setTerm] = useState("");
   const [items, setItems] = useState<CartItem[]>([]);
   const [medio, setMedio] = useState<MedioPago | null>(null);
   const [pesable, setPesable] = useState<Producto | null>(null);
@@ -110,10 +111,14 @@ export function CajaCliente() {
   // Scanner global: red de seguridad para el scan cuando el foco está en el
   // buscador. Se pausa mientras el diálogo de peso está abierto (ahí Enter
   // confirma el peso).
-  useScanner(resolverCodigo, {
-    enabled: pesable === null,
-    ignore: () => codigoRef.current,
-  });
+  useScanner(
+    (code) => {
+      setTerm(""); // si el scan cayó en el buscador, borralo
+      resolverCodigo(code);
+      foco();
+    },
+    { enabled: pesable === null, ignore: () => codigoRef.current },
+  );
 
   // Imprimir el ticket apenas se registra una venta.
   useEffect(() => {
@@ -181,6 +186,9 @@ export function CajaCliente() {
       return;
     }
     setTicket(res.venta);
+    if (res.venta.items.length !== items.length) {
+      toast.warning("Ojo: algunos ítems no se registraron. Revisá el ticket.");
+    }
     toast.success(`Venta #${res.venta.ticket_nro} — ${pesos(res.venta.total)}`);
     setItems([]);
     setMedio(null);
@@ -204,9 +212,12 @@ export function CajaCliente() {
             />
           </form>
           <Buscador
+            term={term}
+            onTermChange={setTerm}
             onElegir={(p) => {
               if (p.es_pesable) setPesable(p);
               else agregarNormal(p);
+              setTerm("");
               foco();
             }}
           />
@@ -265,6 +276,9 @@ export function CajaCliente() {
       />
 
       <Ticket venta={ticket} />
+      {/* Precarga del logo para que el ticket lo imprima sin demora. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/brand/logo.png" alt="" aria-hidden className="hidden" />
     </>
   );
 }

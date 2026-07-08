@@ -69,6 +69,14 @@ create index if not exists venta_items_venta_idx    on public.venta_items (venta
 create index if not exists venta_items_producto_idx on public.venta_items (producto_id);
 alter table public.venta_items enable row level security;
 
+-- Defensa en profundidad: cantidades y montos válidos (idempotente).
+alter table public.venta_items drop constraint if exists venta_items_cantidad_pos;
+alter table public.venta_items add  constraint venta_items_cantidad_pos check (cantidad > 0);
+alter table public.venta_items drop constraint if exists venta_items_subtotal_nonneg;
+alter table public.venta_items add  constraint venta_items_subtotal_nonneg check (subtotal >= 0);
+alter table public.ventas drop constraint if exists ventas_total_nonneg;
+alter table public.ventas add  constraint ventas_total_nonneg check (total >= 0);
+
 -- ============================================================================
 -- RLS: lectura para usuarios provisionados; SIN escritura desde clientes.
 -- Toda escritura pasa por los RPC SECURITY DEFINER (corren como owner).
@@ -171,7 +179,16 @@ begin
     raise exception 'La venta no tiene items';
   end if;
 
-  -- Resolver items contra el catálogo (precio/iva/desc autoritativos).
+  -- Validar cada renglón: producto_id presente y cantidad > 0.
+  if exists (
+    select 1
+    from jsonb_to_recordset(p_items) as i(producto_id uuid, cantidad numeric)
+    where i.producto_id is null or i.cantidad is null or i.cantidad <= 0
+  ) then
+    raise exception 'Items inválidos (la cantidad debe ser mayor a 0)';
+  end if;
+
+  -- Resolver items contra el catálogo (precio/iva/desc autoritativos; cantidad redondeada una sola vez).
   select jsonb_agg(jsonb_build_object(
     'producto_id', p.id,
     'codigo',      p.codigo,
@@ -182,14 +199,26 @@ begin
                         else coalesce(p.precio_venta, 0) end)::numeric(12,2),
     'iva_pct',     p.iva_pct,
     'subtotal',    round((case when p.es_pesable then coalesce(p.precio_por_kg, 0)
-                              else coalesce(p.precio_venta, 0) end) * i.cantidad, 2)
+                              else coalesce(p.precio_venta, 0) end)
+                         * round(i.cantidad::numeric, 3), 2)
   ))
   into v_resueltos
   from jsonb_to_recordset(p_items) as i(producto_id uuid, cantidad numeric)
   join public.productos p on p.id = i.producto_id and p.activo = true;
 
-  if v_resueltos is null then
-    raise exception 'Ningún producto válido en la venta';
+  -- Todos los renglones deben resolver (producto existe y está activo): si
+  -- alguno se cayó, abortar en vez de cobrar de menos en silencio.
+  if v_resueltos is null
+     or jsonb_array_length(v_resueltos) <> jsonb_array_length(p_items) then
+    raise exception 'Algún producto no existe o está inactivo';
+  end if;
+
+  -- Ningún renglón puede salir gratis (precio no cargado).
+  if exists (
+    select 1 from jsonb_array_elements(v_resueltos) it
+    where (it->>'precio_unit')::numeric <= 0
+  ) then
+    raise exception 'Algún producto no tiene precio cargado';
   end if;
 
   select

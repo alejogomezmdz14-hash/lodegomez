@@ -1,4 +1,3 @@
-import { Marca } from "@/components/marca";
 import { pesos, cantidadStr } from "@/lib/formato";
 import { MEDIOS_PAGO, type VentaTicket } from "@/lib/types";
 
@@ -16,7 +15,13 @@ export function Ticket({ venta }: { venta: VentaTicket | null }) {
     <div className="hidden print:block">
       <div className="mx-auto w-[72mm] px-1 py-2 text-[11px] leading-tight text-black">
         <div className="flex flex-col items-center gap-1">
-          <Marca className="h-16 w-auto" />
+          {/* <img> plano (no next/image) para impresión confiable. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/logo.png"
+            alt="Lo De Gómez"
+            className="h-16 w-auto object-contain"
+          />
           <p className="text-center text-[10px]">
             Ticket no válido como factura
           </p>
