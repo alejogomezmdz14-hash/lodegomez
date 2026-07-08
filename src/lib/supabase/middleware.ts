@@ -33,10 +33,16 @@ export async function updateSession(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    // Candado del panel de administración: solo usuarios con rol 'admin'.
-    if (request.nextUrl.pathname.startsWith("/admin")) {
-      if (!user) return redirigir(request, response, "/ingresar");
+    const path = request.nextUrl.pathname;
+    const esPublica = path === "/ingresar" || path.startsWith("/ingresar/");
 
+    // Sin sesión, solo se permite el login: todo el resto va a /ingresar.
+    if (!user && !esPublica) {
+      return redirigir(request, response, "/ingresar");
+    }
+
+    // Candado del panel de administración: además del login, rol 'admin'.
+    if (user && path.startsWith("/admin")) {
       const { data: perfil } = await supabase
         .from("usuarios")
         .select("rol")

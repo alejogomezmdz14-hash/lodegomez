@@ -1,0 +1,70 @@
+// Tipos del dominio (a mano para el MVP; migrar a `supabase gen types` al
+// estabilizar el schema, fin de Etapa 2/3).
+
+export type MedioPago = "efectivo" | "qr" | "tarjeta" | "transferencia";
+export type EstadoVenta = "activa" | "anulada" | "devuelta";
+
+export const MEDIOS_PAGO: { valor: MedioPago; label: string }[] = [
+  { valor: "efectivo", label: "Efectivo" },
+  { valor: "qr", label: "QR" },
+  { valor: "tarjeta", label: "Tarjeta" },
+  { valor: "transferencia", label: "Transferencia" },
+];
+
+// Columnas exactas de public.productos (migración 0001).
+export type Producto = {
+  id: string;
+  codigo: string;
+  descripcion: string | null;
+  rubro: string | null;
+  rubro_original: string | null;
+  precio_costo: number | null;
+  precio_venta: number | null;
+  margen_pct: number | null;
+  iva_pct: number;
+  stock: number;
+  stock_minimo: number | null;
+  es_pesable: boolean;
+  precio_por_kg: number | null;
+  necesita_inventario: boolean;
+  activo: boolean;
+  modificado_por: string | null;
+  modificado_en: string | null;
+  creado_en: string;
+  actualizado_en: string;
+};
+
+// Ítem del carrito (estado del cliente). `cantidad` = unidades, o kg si es pesable.
+export type CartItem = {
+  producto_id: string;
+  codigo: string;
+  descripcion: string;
+  cantidad: number;
+  es_pesable: boolean;
+  precio_unit: number;
+  iva_pct: number;
+  subtotal: number;
+};
+
+// Lo que envía el cliente al RPC registrar_venta.
+export type ItemVenta = { producto_id: string; cantidad: number };
+
+// Payload que devuelve registrar_venta, para imprimir el ticket.
+export type TicketItem = {
+  codigo: string | null;
+  descripcion: string | null;
+  cantidad: number;
+  es_pesable: boolean;
+  precio_unit: number;
+  subtotal: number;
+};
+
+export type VentaTicket = {
+  id: string;
+  ticket_nro: number;
+  creada_en: string;
+  medio_pago: MedioPago;
+  total: number;
+  total_iva: number | null;
+  items: TicketItem[];
+};

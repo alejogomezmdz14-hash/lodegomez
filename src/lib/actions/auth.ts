@@ -21,7 +21,7 @@ export async function iniciarSesion(
   if (error) {
     return { error: "Email o contraseña incorrectos." };
   }
-  redirect("/admin/empleados");
+  redirect("/"); // rutea por sesión/rol (→ /caja)
 }
 
 export async function cerrarSesion() {
