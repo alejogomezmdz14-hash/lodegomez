@@ -14,15 +14,14 @@ export function Ticket({ venta }: { venta: VentaTicket | null }) {
   return (
     <div className="hidden print:block">
       <div className="mx-auto w-[72mm] px-1 py-2 text-[11px] leading-tight text-black">
-        <div className="flex flex-col items-center gap-1">
-          {/* <img> plano (no next/image) para impresión confiable. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/brand/logo.png"
-            alt="Lo De Gómez"
-            className="h-16 w-auto object-contain"
-          />
-          <p className="text-center text-[10px]">
+        <div className="flex flex-col items-center gap-0.5">
+          <span className="text-lg font-bold leading-none tracking-tight">
+            Lo De Gómez
+          </span>
+          <span className="text-[9px] uppercase tracking-[0.2em]">
+            Super Completo
+          </span>
+          <p className="mt-1 text-center text-[10px]">
             Ticket no válido como factura
           </p>
         </div>

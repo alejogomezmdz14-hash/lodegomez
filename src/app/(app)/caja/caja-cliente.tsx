@@ -276,9 +276,6 @@ export function CajaCliente() {
       />
 
       <Ticket venta={ticket} />
-      {/* Precarga del logo para que el ticket lo imprima sin demora. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/brand/logo.png" alt="" aria-hidden className="hidden" />
     </>
   );
 }

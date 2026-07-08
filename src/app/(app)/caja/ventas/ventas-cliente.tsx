@@ -314,9 +314,6 @@ export function VentasCliente({
           </div>
         )}
 
-        {/* Precarga del logo para reimprimir sin demora. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/brand/logo.png" alt="" aria-hidden className="hidden" />
       </div>
 
       <Ticket venta={ticketReimprimir} />

@@ -127,4 +127,8 @@
     padding: 0 !important;
     background: #fff;
   }
+  /* Ocultar los avisos (toasts) para que no se impriman sobre el ticket. */
+  [data-sonner-toaster] {
+    display: none !important;
+  }
 }
