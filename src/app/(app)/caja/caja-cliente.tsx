@@ -8,6 +8,7 @@ import { useScanner } from "@/lib/hooks/use-scanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { pesos, redondear2 } from "@/lib/formato";
+import { imprimirTicket } from "@/lib/imprimir";
 import type { CartItem, MedioPago, Producto, VentaTicket } from "@/lib/types";
 import { Carrito } from "./carrito";
 import { Buscador } from "./buscador";
@@ -123,8 +124,7 @@ export function CajaCliente() {
   // Imprimir el ticket apenas se registra una venta.
   useEffect(() => {
     if (!ticket) return;
-    const id = window.setTimeout(() => window.print(), 120);
-    return () => window.clearTimeout(id);
+    imprimirTicket();
   }, [ticket]);
 
   function onSubmitCodigo(e: FormEvent) {

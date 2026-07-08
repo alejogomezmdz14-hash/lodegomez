@@ -15,6 +15,7 @@ import { anularVenta } from "@/lib/actions/ventas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { pesos, cantidadStr } from "@/lib/formato";
+import { imprimirTicket } from "@/lib/imprimir";
 import {
   MEDIOS_PAGO,
   type VentaListado,
@@ -47,8 +48,7 @@ export function VentasCliente({
   // Reimprimir cuando se arma el ticket.
   useEffect(() => {
     if (!ticketReimprimir) return;
-    const id = window.setTimeout(() => window.print(), 150);
-    return () => window.clearTimeout(id);
+    imprimirTicket();
   }, [ticketReimprimir]);
 
   async function toggle(v: VentaListado) {
