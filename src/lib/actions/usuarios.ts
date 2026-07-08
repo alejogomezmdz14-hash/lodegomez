@@ -48,15 +48,12 @@ export async function crearUsuario(input: EmpleadoInput): Promise<Resultado> {
     return { ok: false, error: msg };
   }
 
-  // El trigger handle_new_user ya creó la fila en public.usuarios como 'empleado'.
-  // Si se pidió admin, lo ascendemos.
-  if (input.rol === "admin") {
-    const { error: e2 } = await admin
-      .from("usuarios")
-      .update({ rol: "admin" })
-      .eq("id", data.user.id);
-    if (e2) return { ok: false, error: e2.message };
-  }
+  // Ya no hay alta automática en signup: creamos la fila en public.usuarios
+  // explícitamente, con el rol elegido.
+  const { error: e2 } = await admin
+    .from("usuarios")
+    .upsert({ id: data.user.id, nombre, rol: input.rol ?? "empleado" });
+  if (e2) return { ok: false, error: e2.message };
   return { ok: true };
 }
 

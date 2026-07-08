@@ -3,10 +3,10 @@
 -- Revisado (Postgres 15 + RLS Supabase). Correr en el SQL Editor de Supabase.
 -- Es idempotente: se puede correr más de una vez sin error.
 --
--- DESPUÉS DE APLICAR (ver bloque al final del archivo):
---   1) Desactivar el registro público en Authentication (si no, cualquiera se
---      registra y puede tocar precios / ver costos).
---   2) Promover al/los primer(os) admin(s) por SQL (nadie es admin por default).
+-- Modelo de seguridad: los usuarios los crea ÚNICAMENTE el admin (no hay alta
+-- automática en signup). Solo un usuario "provisionado" (con fila en public.usuarios)
+-- accede a los datos del negocio. Igual conviene desactivar el registro público en
+-- Authentication (ver bloque al final).
 -- ============================================================================
 
 -- === Extensiones ===
@@ -42,6 +42,15 @@ language sql stable security definer set search_path = public as $$
   select coalesce(public.rol_actual() = 'admin', false);
 $$;
 
+-- Usuario "provisionado": tiene fila en public.usuarios (lo dio de alta el admin).
+-- Como NO hay alta automática en signup, alguien que se autoregistrara con la
+-- anon key no tendría fila y las policies no le darían acceso a nada del negocio.
+create or replace function public.es_usuario()
+returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.usuarios where id = auth.uid());
+$$;
+
 drop policy if exists usuarios_select on public.usuarios;
 create policy usuarios_select on public.usuarios
   for select to authenticated using (id = auth.uid() or public.es_admin());
@@ -50,20 +59,11 @@ drop policy if exists usuarios_admin_all on public.usuarios;
 create policy usuarios_admin_all on public.usuarios
   for all to authenticated using (public.es_admin()) with check (public.es_admin());
 
--- Alta automática del perfil cuando se crea el auth.user (signup / invitación).
-create or replace function public.handle_new_user()
-returns trigger language plpgsql security definer set search_path = public as $$
-begin
-  insert into public.usuarios (id, nombre)
-  values (new.id, new.raw_user_meta_data->>'nombre')
-  on conflict (id) do nothing;
-  return new;
-end $$;
-
+-- SIN alta automática en signup: los usuarios los crea únicamente el admin
+-- (Server Action crearUsuario / script crear-admin.mjs), que inserta la fila en
+-- public.usuarios explícitamente. Se elimina el trigger histórico si existiera.
 drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute function public.handle_new_user();
+drop function if exists public.handle_new_user();
 
 -- ============================================================================
 -- productos: catálogo (migrado desde STOCK.DBF)
@@ -94,16 +94,16 @@ create index if not exists productos_desc_trgm_idx on public.productos using gin
 
 alter table public.productos enable row level security;
 
--- Lectura: cualquier usuario autenticado.
+-- Lectura: solo usuarios provisionados (empleado o admin), no cualquier autenticado.
 drop policy if exists productos_select on public.productos;
 create policy productos_select on public.productos
-  for select to authenticated using (true);
+  for select to authenticated using (public.es_usuario());
 
--- Modificación: cualquier autenticado (empleado/admin). El trigger de más abajo
--- limita al empleado a precio_venta y stock; admin puede todo.
+-- Modificación: usuarios provisionados. El trigger de más abajo limita al empleado
+-- a precio_venta y stock; el admin puede todo.
 drop policy if exists productos_update on public.productos;
 create policy productos_update on public.productos
-  for update to authenticated using (true) with check (true);
+  for update to authenticated using (public.es_usuario()) with check (public.es_usuario());
 
 -- Alta/baja de productos: solo admin.
 drop policy if exists productos_insert_admin on public.productos;
@@ -136,10 +136,10 @@ drop policy if exists auditoria_select_admin on public.auditoria;
 create policy auditoria_select_admin on public.auditoria
   for select to authenticated using (public.es_admin());
 
--- Inserción directa: solo atribuyéndose a uno mismo (el trigger la escribe server-side).
+-- Inserción: NO se permite desde clientes. La auditoría la escribe únicamente el
+-- trigger productos_auditar (security definer, corre como owner y omite RLS), así
+-- nadie puede forjar ni inundar el registro de auditoría.
 drop policy if exists auditoria_insert on public.auditoria;
-create policy auditoria_insert on public.auditoria
-  for insert to authenticated with check (usuario_id = auth.uid());
 
 -- ============================================================================
 -- FKs hacia usuarios con ON DELETE SET NULL: así se puede dar de baja un
@@ -212,10 +212,10 @@ create trigger productos_auditar
   for each row execute function public.productos_auditar();
 
 -- ============================================================================
--- DESPUÉS DE APLICAR — pasos manuales (no se pueden hacer desde este archivo):
+-- DESPUÉS DE APLICAR — pasos manuales:
 --
--- 1) Desactivar registro público: Dashboard → Authentication → Sign In / Providers
---    → apagar "Allow new users to sign up". Los empleados se crean por invitación.
+-- 1) (Defensa extra) Desactivar registro público: Dashboard → Authentication →
+--    Sign In / Providers → apagar "Allow new users to sign up".
 --
 -- 2) Promover admin(s) (registrate/creá el usuario primero, después):
 --    update public.usuarios u set rol = 'admin'
