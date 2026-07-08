@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,7 @@ export function PanelCliente() {
   const [ranking, setRanking] = useState<RankingItem[]>([]);
   const [eventos, setEventos] = useState<EventoDueno[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let cancelado = false;
@@ -76,9 +78,14 @@ export function PanelCliente() {
           .limit(30),
       ]);
       if (cancelado) return;
-      setMetricas((m.data as MetricasPeriodo | null) ?? null);
-      setRanking((r.data as RankingItem[] | null) ?? []);
-      setEventos((e.data as EventoDueno[] | null) ?? []);
+      if (m.error || r.error || e.error) {
+        setError(true);
+      } else {
+        setError(false);
+        setMetricas((m.data as MetricasPeriodo | null) ?? null);
+        setRanking((r.data as RankingItem[] | null) ?? []);
+        setEventos((e.data as EventoDueno[] | null) ?? []);
+      }
       setCargando(false);
     })();
     return () => {
@@ -90,7 +97,16 @@ export function PanelCliente() {
     setEventos((prev) =>
       prev.map((ev) => (ev.id === id ? { ...ev, leido: true } : ev)),
     );
-    await supabase.from("eventos_duenos").update({ leido: true }).eq("id", id);
+    const { error: err } = await supabase
+      .from("eventos_duenos")
+      .update({ leido: true })
+      .eq("id", id);
+    if (err) {
+      setEventos((prev) =>
+        prev.map((ev) => (ev.id === id ? { ...ev, leido: false } : ev)),
+      );
+      toast.error("No se pudo marcar como leído");
+    }
   }
 
   return (
@@ -108,6 +124,12 @@ export function PanelCliente() {
           </Button>
         ))}
       </div>
+
+      {error ? (
+        <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          No se pudieron cargar los datos. Revisá la conexión y volvé a intentar.
+        </p>
+      ) : null}
 
       {/* Métricas */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

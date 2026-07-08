@@ -85,7 +85,7 @@ export type ResumenCaja = {
   diferencia?: number | null;
 };
 
-// Fila de la lista de ventas (pantalla de anulación).
+// Fila de la lista de ventas (pantalla de ventas/anulación).
 export type VentaListado = {
   id: string;
   ticket_nro: number;
@@ -93,6 +93,18 @@ export type VentaListado = {
   medio_pago: MedioPago;
   total: number;
   estado: EstadoVenta;
+  cierre_id: string | null;
+  empleado_nombre: string | null;
+};
+
+// Ítem de un ticket (detalle expandible).
+export type VentaItemDetalle = {
+  codigo: string | null;
+  descripcion: string | null;
+  cantidad: number;
+  es_pesable: boolean;
+  precio_unit: number;
+  subtotal: number;
 };
 
 // Dashboard (Etapa 3).
