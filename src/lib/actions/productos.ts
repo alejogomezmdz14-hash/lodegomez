@@ -3,14 +3,17 @@
 import { createClient } from "@/lib/supabase/server";
 import { getUsuarioActual } from "@/lib/auth";
 
-export type Resultado = { ok: true } | { ok: false; error: string };
+export type ResultadoGuardado =
+  | { ok: true; precio_venta: number | null; stock: number }
+  | { ok: false; error: string };
 
 // Edita precio y/o stock de un producto. La RLS + el trigger productos_guard_update
-// limitan al empleado a precio_venta/stock; el trigger de auditoría registra el cambio.
+// limitan al empleado a precio_venta/stock; el trigger de auditoría registra el
+// cambio. Devuelve el valor realmente persistido (así la UI no diverge de la base).
 export async function actualizarProducto(
   id: string,
   cambios: { precio_venta?: number; stock?: number },
-): Promise<Resultado> {
+): Promise<ResultadoGuardado> {
   const u = await getUsuarioActual();
   if (!u) return { ok: false, error: "No autorizado" };
 
@@ -32,7 +35,17 @@ export async function actualizarProducto(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("productos").update(patch).eq("id", id);
+  const { data, error } = await supabase
+    .from("productos")
+    .update(patch)
+    .eq("id", id)
+    .select("precio_venta, stock")
+    .maybeSingle();
   if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  if (!data) return { ok: false, error: "No se pudo guardar (sin permiso)." };
+  return {
+    ok: true,
+    precio_venta: data.precio_venta === null ? null : Number(data.precio_venta),
+    stock: Number(data.stock),
+  };
 }

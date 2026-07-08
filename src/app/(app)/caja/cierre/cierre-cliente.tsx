@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { cerrarCaja } from "@/lib/actions/caja";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { pesos } from "@/lib/formato";
+import { pesos, parseNumeroAR } from "@/lib/formato";
 import type { ResumenCaja } from "@/lib/types";
 
 export function CierreCliente({ resumen }: { resumen: ResumenCaja | null }) {
@@ -23,15 +23,12 @@ export function CierreCliente({ resumen }: { resumen: ResumenCaja | null }) {
   }
 
   const efectivoSistema = Number(resumen.total_efectivo);
-  const contadoNum = Number(contado.replace(",", "."));
-  const dif =
-    contado.trim() !== "" && Number.isFinite(contadoNum)
-      ? contadoNum - efectivoSistema
-      : null;
+  const contadoNum = parseNumeroAR(contado);
+  const dif = contadoNum !== null ? contadoNum - efectivoSistema : null;
 
   function cerrar() {
-    const val = contado.trim() === "" ? null : Number(contado.replace(",", "."));
-    if (val !== null && (!Number.isFinite(val) || val < 0)) {
+    const val = contado.trim() === "" ? null : parseNumeroAR(contado);
+    if (contado.trim() !== "" && (val === null || val < 0)) {
       toast.error("Efectivo contado inválido");
       return;
     }

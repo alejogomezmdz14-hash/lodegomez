@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { actualizarProducto } from "@/lib/actions/productos";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { pesos } from "@/lib/formato";
+import { pesos, parseNumeroAR } from "@/lib/formato";
 import type { Producto } from "@/lib/types";
 
 export function ProductosCliente() {
@@ -78,27 +78,37 @@ function FilaProducto({ producto }: { producto: Producto }) {
   const costo = Number(producto.precio_costo ?? 0);
 
   function guardar() {
-    const p = Number(precio.replace(",", "."));
-    const s = Number(stock.replace(",", "."));
-    if (!Number.isFinite(p) || p < 0) {
-      toast.error("Precio inválido");
-      return;
+    const cambios: { precio_venta?: number; stock?: number } = {};
+    if (precio !== guardadoPrecio) {
+      const p = parseNumeroAR(precio);
+      if (p === null || p < 0) {
+        toast.error("Precio inválido");
+        return;
+      }
+      cambios.precio_venta = p;
     }
-    if (!Number.isFinite(s)) {
-      toast.error("Stock inválido");
-      return;
+    if (stock !== guardadoStock) {
+      const s = parseNumeroAR(stock);
+      if (s === null) {
+        toast.error("Stock inválido");
+        return;
+      }
+      cambios.stock = s;
     }
+    if (cambios.precio_venta === undefined && cambios.stock === undefined) return;
     startTransition(async () => {
-      const res = await actualizarProducto(producto.id, {
-        precio_venta: p,
-        stock: s,
-      });
+      const res = await actualizarProducto(producto.id, cambios);
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
-      setGuardadoPrecio(precio);
-      setGuardadoStock(stock);
+      // Reflejar lo que realmente quedó en la base (evita divergencia).
+      const np = res.precio_venta === null ? "" : String(res.precio_venta);
+      const ns = String(res.stock);
+      setPrecio(np);
+      setStock(ns);
+      setGuardadoPrecio(np);
+      setGuardadoStock(ns);
       toast.success("Guardado");
     });
   }
