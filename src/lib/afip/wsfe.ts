@@ -1,5 +1,6 @@
 import "server-only";
 import { getTA } from "./wsaa";
+import { afipPost } from "./http";
 
 type Entorno = "homologacion" | "produccion";
 const entornoAfip = (): Entorno =>
@@ -22,23 +23,12 @@ async function callWsfe(metodo: string, innerXml: string): Promise<string> {
     `xmlns:ar="http://ar.gov.afip.dif.FEV1/"><soap:Body>` +
     `<ar:${metodo}>${auth}${innerXml}</ar:${metodo}>` +
     `</soap:Body></soap:Envelope>`;
-  let res: Response;
-  try {
-    res = await fetch(WSFE_URL[entornoAfip()], {
-      method: "POST",
-      headers: {
-        "Content-Type": "text/xml; charset=utf-8",
-        SOAPAction: `http://ar.gov.afip.dif.FEV1/${metodo}`,
-      },
-      body,
-    });
-  } catch (e) {
-    const c = (e as { cause?: { code?: string; message?: string } }).cause;
-    throw new Error(
-      `conexion WSFE (${metodo}) fallo: ${c?.code ?? c?.message ?? (e as Error).message}`,
-    );
-  }
-  return res.text();
+  return afipPost(
+    WSFE_URL[entornoAfip()],
+    `http://ar.gov.afip.dif.FEV1/${metodo}`,
+    body,
+    `WSFE ${metodo}`,
+  );
 }
 
 // Extrae el contenido de un tag (tolerante a prefijo de namespace).
