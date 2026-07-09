@@ -12,7 +12,8 @@ import { toast } from "sonner";
 import { ChevronDown, ChevronRight, Printer } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { anularVenta } from "@/lib/actions/ventas";
-import { emitirComprobante, reintentarComprobante } from "@/lib/actions/comprobantes";
+import { reintentarComprobante } from "@/lib/actions/comprobantes";
+import type { ComprobanteImpresion } from "@/lib/actions/comprobantes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { pesos, cantidadStr } from "@/lib/formato";
@@ -22,10 +23,13 @@ import {
   type VentaListado,
   type VentaItemDetalle,
   type VentaTicket,
+  type TicketItem,
   type Pago,
   type MedioPago,
 } from "@/lib/types";
 import { Ticket } from "../ticket";
+import { FacturaPaso } from "../factura-paso";
+import { TicketFiscal } from "../ticket-fiscal";
 
 const ITEM_COLS = "codigo,descripcion,cantidad,es_pesable,precio_unit,subtotal";
 
@@ -43,6 +47,11 @@ export function VentasCliente({
   const [items, setItems] = useState<Record<string, VentaItemDetalle[]>>({});
   const [cargando, setCargando] = useState<string | null>(null);
   const [ticketReimprimir, setTicketReimprimir] = useState<VentaTicket | null>(null);
+  const [facturarPanel, setFacturarPanel] = useState<VentaListado | null>(null);
+  const [fiscalPrint, setFiscalPrint] = useState<{
+    data: ComprobanteImpresion;
+    items: TicketItem[];
+  } | null>(null);
 
   const [busqueda, setBusqueda] = useState("");
   const [resultado, setResultado] = useState<{
@@ -55,6 +64,11 @@ export function VentasCliente({
     if (!ticketReimprimir) return;
     imprimirTicket();
   }, [ticketReimprimir]);
+
+  useEffect(() => {
+    if (!fiscalPrint) return;
+    imprimirTicket();
+  }, [fiscalPrint]);
 
   async function toggle(v: VentaListado) {
     if (expandido === v.id) {
@@ -88,6 +102,7 @@ export function VentasCliente({
         monto: Number(p.monto),
       }));
     }
+    setFiscalPrint(null);
     setTicketReimprimir({
       id: v.id,
       ticket_nro: v.ticket_nro,
@@ -99,6 +114,16 @@ export function VentasCliente({
       items: its,
       pagos,
     });
+  }
+
+  // Imprime el ticket fiscal de una venta recién facturada.
+  async function imprimirFiscal(ventaId: string, data: ComprobanteImpresion) {
+    const { data: its } = await supabase
+      .from("venta_items")
+      .select(ITEM_COLS)
+      .eq("venta_id", ventaId);
+    setTicketReimprimir(null);
+    setFiscalPrint({ data, items: (its as TicketItem[] | null) ?? [] });
   }
 
   function anular(v: VentaListado) {
@@ -157,16 +182,8 @@ export function VentasCliente({
     return "Error";
   }
 
-  function facturarB(v: VentaListado) {
-    startTransition(async () => {
-      const res = await emitirComprobante({ venta_id: v.id, tipo: "B" });
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      toast.success(`Factura B emitida para #${v.ticket_nro}`);
-      router.refresh();
-    });
+  function abrirFacturar(v: VentaListado) {
+    setFacturarPanel(v);
   }
 
   function reintentar(v: VentaListado) {
@@ -177,6 +194,7 @@ export function VentasCliente({
         return;
       }
       toast.success(`Factura reemitida para #${v.ticket_nro}`);
+      await imprimirFiscal(v.id, res.data);
       router.refresh();
     });
   }
@@ -316,7 +334,7 @@ export function VentasCliente({
                                 disabled={pending}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  facturarB(v);
+                                  abrirFacturar(v);
                                 }}
                               >
                                 Facturar
@@ -405,6 +423,29 @@ export function VentasCliente({
         )}
 
       </div>
+
+      {facturarPanel ? (
+        <div className="fixed inset-x-0 bottom-0 z-50 border-t bg-background p-4 shadow-lg print:hidden">
+          <div className="mx-auto max-w-md">
+            <FacturaPaso
+              ventaId={facturarPanel.id}
+              onSaltar={() => setFacturarPanel(null)}
+              onListo={async (data) => {
+                const v = facturarPanel;
+                setFacturarPanel(null);
+                if (v) await imprimirFiscal(v.id, data);
+                router.refresh();
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      <TicketFiscal
+        comprobante={fiscalPrint?.data.comprobante ?? null}
+        items={fiscalPrint?.items ?? []}
+        qrSvg={fiscalPrint?.data.qr_svg ?? null}
+      />
 
       <Ticket venta={ticketReimprimir} />
     </>
