@@ -183,3 +183,54 @@ export type VentaPorEmpleado = {
   tickets: number;
   total: number;
 };
+
+// ===== Fiscal (factura electrónica) =====
+export type TipoFactura = "A" | "B";
+export type EstadoComprobante = "pendiente" | "emitido" | "error";
+
+// Condición IVA del receptor (coincide con CondicionIVAReceptorId de AFIP).
+export const COND_IVA: { valor: number; label: string }[] = [
+  { valor: 1, label: "Responsable Inscripto" },
+  { valor: 6, label: "Monotributo" },
+  { valor: 4, label: "Exento" },
+  { valor: 5, label: "Consumidor Final" },
+];
+
+export type Cliente = {
+  id: string;
+  doc_tipo: number; // 80 CUIT | 96 DNI | 86 CUIL
+  doc_nro: string;
+  razon_social: string;
+  domicilio: string | null;
+  cond_iva: number;
+  email: string | null;
+  telefono: string | null;
+  creado_en: string;
+};
+
+export type Comprobante = {
+  id: string;
+  venta_id: string;
+  tipo: TipoFactura;
+  cbte_tipo: number;
+  punto_venta: number;
+  numero: number | null;
+  cliente_id: string | null;
+  doc_tipo: number;
+  doc_nro: string;
+  cond_iva_receptor: number;
+  cliente_nombre: string | null;
+  neto: number;
+  iva: number;
+  exento: number;
+  total: number;
+  cae: string | null;
+  cae_vto: string | null;
+  qr_payload: string | null;
+  estado: EstadoComprobante;
+  error_detalle: string | null;
+  emitido_en: string | null;
+};
+
+// Estado fiscal por venta, para la lista de ventas.
+export type EstadoFiscal = "sin_factura" | "A" | "B" | "pendiente" | "error";
