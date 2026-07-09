@@ -1831,3 +1831,27 @@ git commit --allow-empty -m "chore(fiscal): verificacion e2e homologacion OK"
 2. Certificado de AFIP autorizado para el WS de facturación (panel de AFIP SDK).
 3. Confirmar que el PdV **0007** es tipo *Web Services* y que Easy POS dejó de facturar; setear `AFIP_PTO_VTA=7`, `AFIP_CUIT=27288869990`, `AFIP_ENV=produccion`.
 4. Primera factura real de prueba por monto chico y verificar el CAE en el sitio de AFIP.
+
+---
+
+## Ajustes durante la implementación (verificados)
+
+Correcciones aplicadas tras verificar la API real de AFIP SDK y dos rondas de revisión adversaria:
+- **Cálculo fiscal:** `total` por construcción (cierra `ImpTotal = ImpNeto + ImpIVA + ImpOpEx` exacto) y **rechazo de alícuota desconocida** (no la trata como exenta en silencio).
+- **Cliente AFIP:** `cert`+`key` en producción; `CbteFch` como entero (TZ Argentina); `CondicionIVAReceptorId` validado por clase (A: RI/Mono, B: CF/Exento); emisor de display separado del CUIT/PdV de env (client-safe).
+- **QR:** omite `tipoDocRec`/`nroDocRec` para consumidor final (de corresponder).
+- **Anti doble-facturación:** se reclama una fila `pendiente` (índice único) antes de llamar a AFIP; en reintento se **reconcilia con `getVoucherInfo`** (adopta el CAE si AFIP ya lo autorizó; bloquea si la consulta es inconcluso).
+- **Anti doble-impresión:** se limpian las fuentes de impresión al iniciar cada cobro.
+- **UI:** `key` en el form de clientes (evita corrupción al editar); fecha de emisión en el ticket fiscal; facturar desde la lista imprime el ticket fiscal y permite A/B; guards de auth en actions con admin client; prefill de CUIT.
+- **Punto de venta 0007 reutilizado** (solo se factura con este sistema).
+
+## Backlog (no bloquea el MVP)
+- **Factura B identificada sobre umbral (~$10.000.000):** hoy la B va siempre a consumidor final (99/0); sobre el umbral de RG, AFIP exige identificar al comprador (DNI/CUIT) y hoy quedaría en `error`. Sумar captura de documento para B sobre monto.
+- **Notas de crédito** para devoluciones de ventas facturadas.
+- **PDF del comprobante** para enviar por WhatsApp/email.
+- **Reconciliación completa** de la fila `error`/`pendiente` (ya se registra el `numero` intentado).
+
+## Pendiente del dueño (para ir a producción)
+- Task 14 (e2e en **homologación**): requiere `AFIP_ACCESS_TOKEN` de app.afipsdk.com.
+- Aplicar la migración `0012_fiscal.sql` en Supabase.
+- Para producción: certificado AFIP (cert/key), confirmar PdV 0007 como Web Services, `AFIP_ENV=produccion`.
