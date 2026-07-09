@@ -231,6 +231,9 @@ export function CajaCliente() {
       toast.error(dividido ? "El pago no cubre el total" : "Elegí un medio de pago");
       return;
     }
+    // Limpiar impresiones de la venta anterior para que no co-impriman.
+    setTicket(null);
+    setFiscalPrint(null);
     setCobrando(true);
     const res = await registrarVenta(
       pagos,
