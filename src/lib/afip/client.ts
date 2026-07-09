@@ -1,21 +1,22 @@
 import "server-only";
-import Afip from "@afipsdk/afip.js";
+import { wsfeUltimoAutorizado, wsfeSolicitarCAE, wsfeConsultar } from "./wsfe";
 import { calcularImportes } from "./calculo";
 import type { CartItem, TipoFactura } from "@/lib/types";
 
-// Instancia de AFIP SDK. Homologación (por defecto): solo { CUIT, access_token }
-// (el CUIT de prueba 20409378472 no requiere certificado). Producción: además
-// cert + key (PEM autorizado) y production: true.
-export function getAfip(): Afip {
-  return new Afip({
-    CUIT: afipCuit(),
-    // La lib tipa access_token como string requerido; en runtime puede faltar
-    // (se pasa tal cual, undefined incluido). Cast compile-time, sin cambiar el payload.
-    access_token: process.env.AFIP_ACCESS_TOKEN as string,
-    ...(process.env.AFIP_ENV === "produccion"
-      ? { cert: process.env.AFIP_CERT, key: process.env.AFIP_KEY, production: true }
-      : {}),
-  });
+// getAfip(): adaptador. Mantiene la interfaz { ElectronicBilling: { ... } } que
+// usa comprobantes.ts, pero por detrás llama DIRECTO a AFIP (WSAA+WSFE), sin
+// intermediario. Los 3 métodos son async.
+export function getAfip() {
+  return {
+    ElectronicBilling: {
+      getLastVoucher: (ptoVta: number, cbteTipo: number) =>
+        wsfeUltimoAutorizado(ptoVta, cbteTipo),
+      createVoucher: (voucher: ReturnType<typeof armarVoucher>["voucher"]) =>
+        wsfeSolicitarCAE(voucher),
+      getVoucherInfo: (nro: number, ptoVta: number, cbteTipo: number) =>
+        wsfeConsultar(nro, ptoVta, cbteTipo),
+    },
+  };
 }
 
 // CUIT emisor y punto de venta para emisión/QR (server-only, desde env).
