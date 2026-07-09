@@ -138,14 +138,18 @@ export function PanelCliente() {
       {/* Métricas */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Metrica label="Vendido" valor={pesos(Number(metricas?.total ?? 0))} destacado />
+        <Metrica label="Ganancia" valor={pesos(Number(metricas?.margen ?? 0))} destacado />
         <Metrica label="Tickets" valor={String(metricas?.cant_tickets ?? 0)} />
-        <Metrica label="Margen estimado" valor={pesos(Number(metricas?.margen ?? 0))} />
         <Metrica
           label="Anulaciones"
           valor={String(metricas?.anulaciones ?? 0)}
           alerta={(metricas?.anulaciones ?? 0) > 0}
         />
       </div>
+      <p className="-mt-3 text-xs text-muted-foreground">
+        Ganancia = precio − costo de cada producto vendido. Solo cuenta los que
+        tienen el costo cargado (cargalos en Productos para que sea exacta).
+      </p>
 
       {/* Medios de pago */}
       <Card className="flex flex-col gap-2 p-4">
@@ -168,7 +172,7 @@ export function PanelCliente() {
                 <th className="px-4 py-2 font-medium">Producto</th>
                 <th className="px-4 py-2 text-right font-medium">Cantidad</th>
                 <th className="px-4 py-2 text-right font-medium">Facturado</th>
-                <th className="px-4 py-2 text-right font-medium">Margen</th>
+                <th className="px-4 py-2 text-right font-medium">Ganancia</th>
               </tr>
             </thead>
             <tbody>

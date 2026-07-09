@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { pesos, redondear2 } from "@/lib/formato";
 import { imprimirTicket } from "@/lib/imprimir";
+import { NuevoProductoDialog } from "@/components/nuevo-producto-dialog";
 import type { CartItem, MedioPago, Producto, VentaTicket } from "@/lib/types";
 import { Carrito } from "./carrito";
 import { Buscador } from "./buscador";
@@ -25,6 +26,7 @@ export function CajaCliente() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [medio, setMedio] = useState<MedioPago | null>(null);
   const [pesable, setPesable] = useState<Producto | null>(null);
+  const [altaCodigo, setAltaCodigo] = useState<string | null>(null);
   const [cobrando, setCobrando] = useState(false);
   const [ticket, setTicket] = useState<VentaTicket | null>(null);
 
@@ -101,7 +103,7 @@ export function CajaCliente() {
       return;
     }
     if (!data) {
-      toast.error(`Código ${c} no encontrado`);
+      setAltaCodigo(c); // no existe → ofrecer darlo de alta con ese código
       return;
     }
     const p = data as Producto;
@@ -118,7 +120,10 @@ export function CajaCliente() {
       resolverCodigo(code);
       foco();
     },
-    { enabled: pesable === null, ignore: () => codigoRef.current },
+    {
+      enabled: pesable === null && altaCodigo === null,
+      ignore: () => codigoRef.current,
+    },
   );
 
   // Imprimir el ticket apenas se registra una venta.
@@ -271,6 +276,22 @@ export function CajaCliente() {
         onConfirmar={confirmarPeso}
         onCerrar={() => {
           setPesable(null);
+          foco();
+        }}
+      />
+
+      <NuevoProductoDialog
+        key={altaCodigo ?? "sin"}
+        abierto={altaCodigo !== null}
+        codigoInicial={altaCodigo ?? ""}
+        onCerrar={() => {
+          setAltaCodigo(null);
+          foco();
+        }}
+        onCreado={(p) => {
+          setAltaCodigo(null);
+          if (p.es_pesable) setPesable(p);
+          else agregarNormal(p);
           foco();
         }}
       />
