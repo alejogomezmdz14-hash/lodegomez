@@ -82,11 +82,19 @@ async function loginCms(cmsBase64: string, env: Entorno) {
     `<soapenv:Header/><soapenv:Body><wsaa:loginCms>` +
     `<wsaa:in0>${cmsBase64}</wsaa:in0>` +
     `</wsaa:loginCms></soapenv:Body></soapenv:Envelope>`;
-  const res = await fetch(WSAA_URL[env], {
-    method: "POST",
-    headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: "" },
-    body,
-  });
+  let res: Response;
+  try {
+    res = await fetch(WSAA_URL[env], {
+      method: "POST",
+      headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: "" },
+      body,
+    });
+  } catch (e) {
+    const c = (e as { cause?: { code?: string; message?: string } }).cause;
+    throw new Error(
+      `conexion WSAA fallo: ${c?.code ?? c?.message ?? (e as Error).message}`,
+    );
+  }
   const xml = await res.text();
   const fault = xml.match(/<faultstring>([\s\S]*?)<\/faultstring>/i);
   if (fault) throw new WsaaFault(fault[1]);
