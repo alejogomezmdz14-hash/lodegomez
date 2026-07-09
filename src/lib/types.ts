@@ -49,6 +49,9 @@ export type CartItem = {
 // Lo que envía el cliente al RPC registrar_venta.
 export type ItemVenta = { producto_id: string; cantidad: number };
 
+// Un pago (medio + monto). Una venta puede tener varios (pago dividido).
+export type Pago = { medio: MedioPago; monto: number };
+
 // Payload que devuelve registrar_venta, para imprimir el ticket.
 export type TicketItem = {
   codigo: string | null;
@@ -64,9 +67,11 @@ export type VentaTicket = {
   ticket_nro: number;
   creada_en: string;
   medio_pago: MedioPago;
+  es_mixto?: boolean;
   total: number;
   total_iva: number | null;
   items: TicketItem[];
+  pagos?: Pago[];
 };
 
 // Resumen del turno (RPCs resumen_caja_actual / cerrar_caja).
@@ -91,6 +96,7 @@ export type VentaListado = {
   ticket_nro: number;
   creada_en: string;
   medio_pago: MedioPago;
+  es_mixto?: boolean;
   total: number;
   estado: EstadoVenta;
   cierre_id: string | null;

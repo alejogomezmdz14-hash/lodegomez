@@ -21,6 +21,8 @@ import {
   type VentaListado,
   type VentaItemDetalle,
   type VentaTicket,
+  type Pago,
+  type MedioPago,
 } from "@/lib/types";
 import { Ticket } from "../ticket";
 
@@ -71,15 +73,28 @@ export function VentasCliente({
     }
   }
 
-  function reimprimir(v: VentaListado, its: VentaItemDetalle[]) {
+  async function reimprimir(v: VentaListado, its: VentaItemDetalle[]) {
+    let pagos: Pago[] | undefined;
+    if (v.es_mixto) {
+      const { data } = await supabase
+        .from("venta_pagos")
+        .select("medio_pago,monto")
+        .eq("venta_id", v.id);
+      pagos = (data ?? []).map((p) => ({
+        medio: p.medio_pago as MedioPago,
+        monto: Number(p.monto),
+      }));
+    }
     setTicketReimprimir({
       id: v.id,
       ticket_nro: v.ticket_nro,
       creada_en: v.creada_en,
       medio_pago: v.medio_pago,
+      es_mixto: v.es_mixto,
       total: Number(v.total),
       total_iva: null,
       items: its,
+      pagos,
     });
   }
 
@@ -160,7 +175,9 @@ export function VentasCliente({
                   minute: "2-digit",
                 })}{" "}
                 · {pesos(Number(resultado.venta.total))} ·{" "}
-                {medioLabel(resultado.venta.medio_pago)}
+                {resultado.venta.es_mixto
+                  ? "Mixto"
+                  : medioLabel(resultado.venta.medio_pago)}
               </span>
               <Button
                 size="sm"
@@ -232,7 +249,9 @@ export function VentasCliente({
                           })}
                         </td>
                         <td className="px-4 py-3">{v.empleado_nombre ?? "—"}</td>
-                        <td className="px-4 py-3">{medioLabel(v.medio_pago)}</td>
+                        <td className="px-4 py-3">
+                          {v.es_mixto ? "Mixto" : medioLabel(v.medio_pago)}
+                        </td>
                         <td className="px-4 py-3 text-right tabular-nums">
                           {pesos(Number(v.total))}
                         </td>

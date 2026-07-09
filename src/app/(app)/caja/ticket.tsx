@@ -60,7 +60,20 @@ export function Ticket({ venta }: { venta: VentaTicket | null }) {
           <span>TOTAL</span>
           <span className="tabular-nums">{pesos(venta.total)}</span>
         </div>
-        <p className="mt-1 text-right text-[10px]">Pago: {medio}</p>
+        {venta.es_mixto && venta.pagos?.length ? (
+          <div className="mt-1 flex flex-col gap-0.5 text-[10px]">
+            {venta.pagos.map((p, i) => (
+              <div key={i} className="flex justify-between">
+                <span>
+                  {MEDIOS_PAGO.find((m) => m.valor === p.medio)?.label ?? p.medio}
+                </span>
+                <span className="tabular-nums">{pesos(Number(p.monto))}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-1 text-right text-[10px]">Pago: {medio}</p>
+        )}
         <p className="mt-3 text-center text-[10px]">¡Gracias por tu compra!</p>
       </div>
     </div>

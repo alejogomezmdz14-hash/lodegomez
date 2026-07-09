@@ -7,10 +7,17 @@ import { registrarVenta } from "@/lib/actions/ventas";
 import { useScanner } from "@/lib/hooks/use-scanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { pesos, redondear2 } from "@/lib/formato";
+import { pesos, redondear2, parseNumeroAR } from "@/lib/formato";
 import { imprimirTicket } from "@/lib/imprimir";
 import { NuevoProductoDialog } from "@/components/nuevo-producto-dialog";
-import type { CartItem, MedioPago, Producto, VentaTicket } from "@/lib/types";
+import {
+  MEDIOS_PAGO,
+  type CartItem,
+  type MedioPago,
+  type Pago,
+  type Producto,
+  type VentaTicket,
+} from "@/lib/types";
 import { Carrito } from "./carrito";
 import { Buscador } from "./buscador";
 import { DialogoPeso } from "./dialogo-peso";
@@ -25,6 +32,13 @@ export function CajaCliente() {
   const [term, setTerm] = useState("");
   const [items, setItems] = useState<CartItem[]>([]);
   const [medio, setMedio] = useState<MedioPago | null>(null);
+  const [dividido, setDividido] = useState(false);
+  const [montos, setMontos] = useState<Record<MedioPago, string>>({
+    efectivo: "",
+    qr: "",
+    tarjeta: "",
+    transferencia: "",
+  });
   const [pesable, setPesable] = useState<Producto | null>(null);
   const [altaCodigo, setAltaCodigo] = useState<string | null>(null);
   const [cobrando, setCobrando] = useState(false);
@@ -34,6 +48,23 @@ export function CajaCliente() {
     () => redondear2(items.reduce((s, it) => s + it.subtotal, 0)),
     [items],
   );
+
+  // Pagos a enviar: null = incompleto (no se puede cobrar).
+  const pagos = useMemo<Pago[] | null>(() => {
+    if (total <= 0) return null;
+    if (!dividido) return medio ? [{ medio, monto: total }] : null;
+    const lista: Pago[] = [];
+    let suma = 0;
+    for (const m of MEDIOS_PAGO) {
+      const v = parseNumeroAR(montos[m.valor]);
+      if (v && v > 0) {
+        lista.push({ medio: m.valor, monto: redondear2(v) });
+        suma += v;
+      }
+    }
+    if (lista.length === 0) return null;
+    return Math.abs(redondear2(suma) - total) < 0.01 ? lista : null;
+  }, [total, medio, dividido, montos]);
 
   function foco() {
     codigoRef.current?.focus();
@@ -174,15 +205,21 @@ export function CajaCliente() {
     foco();
   }
 
+  function resetPago() {
+    setMedio(null);
+    setDividido(false);
+    setMontos({ efectivo: "", qr: "", tarjeta: "", transferencia: "" });
+  }
+
   async function cobrar() {
     if (items.length === 0) return;
-    if (!medio) {
-      toast.error("Elegí un medio de pago");
+    if (!pagos) {
+      toast.error(dividido ? "El pago no cubre el total" : "Elegí un medio de pago");
       return;
     }
     setCobrando(true);
     const res = await registrarVenta(
-      medio,
+      pagos,
       items.map((it) => ({ producto_id: it.producto_id, cantidad: it.cantidad })),
     );
     setCobrando(false);
@@ -196,7 +233,7 @@ export function CajaCliente() {
     }
     toast.success(`Venta #${res.venta.ticket_nro} — ${pesos(res.venta.total)}`);
     setItems([]);
-    setMedio(null);
+    resetPago();
     foco();
   }
 
@@ -240,7 +277,7 @@ export function CajaCliente() {
                 size="sm"
                 onClick={() => {
                   setItems([]);
-                  setMedio(null);
+                  resetPago();
                   foco();
                 }}
               >
@@ -258,10 +295,42 @@ export function CajaCliente() {
                 {pesos(total)}
               </span>
             </div>
-            <SelectorMedio value={medio} onChange={setMedio} />
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Pago</span>
+              <button
+                type="button"
+                onClick={() => setDividido((d) => !d)}
+                className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+              >
+                {dividido ? "Pago simple" : "Dividir pago"}
+              </button>
+            </div>
+
+            {!dividido ? (
+              <SelectorMedio value={medio} onChange={setMedio} />
+            ) : (
+              <div className="flex flex-col gap-2">
+                {MEDIOS_PAGO.map((m) => (
+                  <div key={m.valor} className="flex items-center gap-2">
+                    <span className="w-32 text-sm">{m.label}</span>
+                    <Input
+                      value={montos[m.valor]}
+                      onChange={(e) =>
+                        setMontos((prev) => ({ ...prev, [m.valor]: e.target.value }))
+                      }
+                      inputMode="decimal"
+                      placeholder="0"
+                      className="h-10"
+                    />
+                  </div>
+                ))}
+                <Remanente total={total} montos={montos} />
+              </div>
+            )}
+
             <Button
               onClick={cobrar}
-              disabled={cobrando || items.length === 0}
+              disabled={cobrando || items.length === 0 || !pagos}
               className="h-14 text-lg"
             >
               {cobrando ? "Cobrando…" : "Cobrar"}
@@ -299,4 +368,26 @@ export function CajaCliente() {
       <Ticket venta={ticket} />
     </>
   );
+}
+
+// Indicador de cuánto falta / se pasó en el pago dividido.
+function Remanente({
+  total,
+  montos,
+}: {
+  total: number;
+  montos: Record<MedioPago, string>;
+}) {
+  const suma = MEDIOS_PAGO.reduce(
+    (s, m) => s + (parseNumeroAR(montos[m.valor]) ?? 0),
+    0,
+  );
+  const dif = redondear2(total - suma);
+  if (Math.abs(dif) < 0.01) {
+    return <p className="text-sm font-medium text-primary">Pago completo ✓</p>;
+  }
+  if (dif > 0) {
+    return <p className="text-sm text-destructive">Falta {pesos(dif)}</p>;
+  }
+  return <p className="text-sm text-destructive">Se pasó {pesos(-dif)}</p>;
 }
