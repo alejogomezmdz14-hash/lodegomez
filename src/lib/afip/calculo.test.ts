@@ -47,4 +47,27 @@ describe("calcularImportes", () => {
     expect(r.neto + r.iva + r.exento).toBeCloseTo(233.33, 2);
     expect(r.iva_items[0].BaseImp + r.iva_items[0].Importe).toBeCloseTo(233.33, 2);
   });
+
+  it("factura all-exento cierra el invariante (total = exento)", () => {
+    const r = calcularImportes([
+      { subtotal: 12.34, iva_pct: 0 },
+      { subtotal: 7.01, iva_pct: 0 },
+    ]);
+    expect(r.exento).toBe(19.35);
+    expect(r.total).toBe(19.35);
+    expect(r.iva_items).toEqual([]);
+    expect(r.neto + r.iva + r.exento).toBe(r.total);
+  });
+
+  it("rechaza una alícuota no soportada (no la trata como exenta)", () => {
+    expect(() => calcularImportes([{ subtotal: 127, iva_pct: 27 }])).toThrow(
+      /no soportada/i,
+    );
+  });
+
+  it("rechaza iva_pct no numérico", () => {
+    expect(() =>
+      calcularImportes([{ subtotal: 100, iva_pct: NaN }]),
+    ).toThrow(/inválido/i);
+  });
 });
