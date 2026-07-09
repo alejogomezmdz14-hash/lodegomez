@@ -32,8 +32,11 @@ razón social, conciliación. Se suman después.
   mirando `ventas` sin cambios.
 - `registrar_venta` **no se toca**. La emisión es una Server Action aparte (llama a una
   API externa; no puede vivir en una función de Postgres).
-- **Punto de venta propio**, distinto del `0007` que usa Easy POS (que sigue operando en
-  paralelo) para no pisar la numeración. Configurable por env.
+- **Punto de venta**: como la facturación pasa a hacerse **solo con este sistema**, se
+  **reutiliza el `0007`** (AFIP continúa la numeración desde el último CAE emitido).
+  Requisitos: (a) que Easy POS **deje de emitir facturas** antes de arrancar en producción,
+  y (b) confirmar que `0007` es de tipo *Web Services*. Configurable por env
+  (`AFIP_PTO_VTA`); si se prefiere un arranque limpio, se puede dar de alta un PdV nuevo.
 
 ## Modelo de datos (migración nueva)
 
@@ -155,7 +158,8 @@ está `emitido`:
 - **Checklist del dueño (dependencia externa, no la hace Claude):**
   1. Cuenta en app.afipsdk.com → `access_token`.
   2. Certificado digital de AFIP autorizado para el WS de facturación (desde el panel de AFIP SDK).
-  3. **Punto de venta nuevo** (Web Services), distinto del `0007` de Easy POS.
+  3. **Punto de venta**: reutilizar el `0007` (confirmar que es tipo *Web Services* y que
+     Easy POS dejó de facturar), o dar de alta uno nuevo si se prefiere.
 
 ## Concurrencia y errores
 - Numeración serializada por advisory lock (PdV + tipo); ante rechazo de AFIP por número
