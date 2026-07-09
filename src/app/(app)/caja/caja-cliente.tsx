@@ -16,6 +16,7 @@ import {
   type MedioPago,
   type Pago,
   type Producto,
+  type TicketItem,
   type VentaTicket,
 } from "@/lib/types";
 import { Carrito } from "./carrito";
@@ -23,6 +24,9 @@ import { Buscador } from "./buscador";
 import { DialogoPeso } from "./dialogo-peso";
 import { SelectorMedio } from "./selector-medio";
 import { Ticket } from "./ticket";
+import { FacturaPaso } from "./factura-paso";
+import { TicketFiscal } from "./ticket-fiscal";
+import type { ComprobanteImpresion } from "@/lib/actions/comprobantes";
 
 export function CajaCliente() {
   const [supabase] = useState(() => createClient());
@@ -43,6 +47,11 @@ export function CajaCliente() {
   const [altaCodigo, setAltaCodigo] = useState<string | null>(null);
   const [cobrando, setCobrando] = useState(false);
   const [ticket, setTicket] = useState<VentaTicket | null>(null);
+  const [postVenta, setPostVenta] = useState<VentaTicket | null>(null);
+  const [fiscalPrint, setFiscalPrint] = useState<{
+    data: ComprobanteImpresion;
+    items: TicketItem[];
+  } | null>(null);
 
   const total = useMemo(
     () => redondear2(items.reduce((s, it) => s + it.subtotal, 0)),
@@ -152,7 +161,7 @@ export function CajaCliente() {
       foco();
     },
     {
-      enabled: pesable === null && altaCodigo === null,
+      enabled: pesable === null && altaCodigo === null && postVenta === null,
       ignore: () => codigoRef.current,
     },
   );
@@ -162,6 +171,11 @@ export function CajaCliente() {
     if (!ticket) return;
     imprimirTicket();
   }, [ticket]);
+
+  useEffect(() => {
+    if (!fiscalPrint) return;
+    imprimirTicket();
+  }, [fiscalPrint]);
 
   function onSubmitCodigo(e: FormEvent) {
     e.preventDefault();
@@ -227,7 +241,7 @@ export function CajaCliente() {
       toast.error(res.error);
       return;
     }
-    setTicket(res.venta);
+    setPostVenta(res.venta);
     if (res.venta.items.length !== items.length) {
       toast.warning("Ojo: algunos ítems no se registraron. Revisá el ticket.");
     }
@@ -363,6 +377,32 @@ export function CajaCliente() {
           else agregarNormal(p);
           foco();
         }}
+      />
+
+      {postVenta ? (
+        <div className="fixed inset-x-0 bottom-0 z-50 border-t bg-background p-4 shadow-lg print:hidden">
+          <div className="mx-auto max-w-md">
+            <FacturaPaso
+              ventaId={postVenta.id}
+              onSaltar={() => {
+                setTicket(postVenta); // imprime el ticket común (no fiscal)
+                setPostVenta(null);
+                foco();
+              }}
+              onListo={(data) => {
+                setFiscalPrint({ data, items: postVenta.items });
+                setPostVenta(null);
+                foco();
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      <TicketFiscal
+        comprobante={fiscalPrint?.data.comprobante ?? null}
+        items={fiscalPrint?.items ?? []}
+        qrSvg={fiscalPrint?.data.qr_svg ?? null}
       />
 
       <Ticket venta={ticket} />
