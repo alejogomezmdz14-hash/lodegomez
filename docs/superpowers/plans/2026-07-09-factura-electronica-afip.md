@@ -317,20 +317,25 @@ Crear `src/lib/afip/qr.test.ts`:
 import { describe, it, expect } from "vitest";
 import { construirQrPayload, qrUrl } from "./qr";
 
+function decode(p: string) {
+  return JSON.parse(Buffer.from(p, "base64").toString("utf8"));
+}
+
 describe("QR de AFIP", () => {
-  it("arma el payload base64 con los campos obligatorios", () => {
-    const payload = construirQrPayload({
-      fecha: "2026-07-08",
-      cuit: 27288869990,
-      ptoVta: 7,
-      tipoCmp: 6,
-      nroCmp: 21608,
-      importe: 20100,
-      docTipoRec: 99,
-      docNroRec: 0,
-      cae: "86273030548980",
-    });
-    const obj = JSON.parse(Buffer.from(payload, "base64").toString("utf8"));
+  it("consumidor final: omite tipoDocRec/nroDocRec (son 'de corresponder')", () => {
+    const obj = decode(
+      construirQrPayload({
+        fecha: "2026-07-08",
+        cuit: 27288869990,
+        ptoVta: 7,
+        tipoCmp: 6,
+        nroCmp: 21608,
+        importe: 20100,
+        docTipoRec: 99,
+        docNroRec: 0,
+        cae: "86273030548980",
+      }),
+    );
     expect(obj).toMatchObject({
       ver: 1,
       fecha: "2026-07-08",
@@ -341,11 +346,29 @@ describe("QR de AFIP", () => {
       importe: 20100,
       moneda: "PES",
       ctz: 1,
-      tipoDocRec: 99,
-      nroDocRec: 0,
       tipoCodAut: "E",
       codAut: 86273030548980,
     });
+    expect(obj.tipoDocRec).toBeUndefined();
+    expect(obj.nroDocRec).toBeUndefined();
+  });
+
+  it("receptor identificado (Factura A): incluye tipoDocRec/nroDocRec", () => {
+    const obj = decode(
+      construirQrPayload({
+        fecha: "2026-07-08",
+        cuit: 27288869990,
+        ptoVta: 7,
+        tipoCmp: 1,
+        nroCmp: 55,
+        importe: 12100,
+        docTipoRec: 80,
+        docNroRec: 30111222223,
+        cae: "12345678901234",
+      }),
+    );
+    expect(obj.tipoDocRec).toBe(80);
+    expect(obj.nroDocRec).toBe(30111222223);
   });
 
   it("qrUrl usa el dominio oficial de AFIP", () => {
@@ -373,13 +396,13 @@ export type DatosQr = {
   tipoCmp: number; // 1 A, 6 B
   nroCmp: number;
   importe: number;
-  docTipoRec: number;
-  docNroRec: number;
+  docTipoRec?: number; // omitir para consumidor final (DocTipo 99)
+  docNroRec?: number;
   cae: string;
 };
 
 export function construirQrPayload(d: DatosQr): string {
-  const obj = {
+  const obj: Record<string, unknown> = {
     ver: 1,
     fecha: d.fecha,
     cuit: d.cuit,
@@ -389,11 +412,15 @@ export function construirQrPayload(d: DatosQr): string {
     importe: d.importe,
     moneda: "PES",
     ctz: 1,
-    tipoDocRec: d.docTipoRec,
-    nroDocRec: d.docNroRec,
-    tipoCodAut: "E",
-    codAut: Number(d.cae),
   };
+  // tipoDocRec/nroDocRec son "de corresponder": solo si el receptor está
+  // identificado (Factura A). Para consumidor final (99/0) se omiten.
+  if (d.docTipoRec && d.docTipoRec !== 99 && d.docNroRec && d.docNroRec > 0) {
+    obj.tipoDocRec = d.docTipoRec;
+    obj.nroDocRec = d.docNroRec;
+  }
+  obj.tipoCodAut = "E";
+  obj.codAut = Number(d.cae);
   return Buffer.from(JSON.stringify(obj), "utf8").toString("base64");
 }
 
@@ -626,26 +653,41 @@ import Afip from "@afipsdk/afip.js";
 import { calcularImportes } from "./calculo";
 import type { CartItem, TipoFactura } from "@/lib/types";
 
-// Instancia de AFIP SDK. En homologación (AFIP_ENV != 'produccion') el flag
-// production es false; con el CUIT de prueba no hace falta certificado.
+// Instancia de AFIP SDK. Homologación (por defecto): solo { CUIT, access_token }
+// (el CUIT de prueba 20409378472 no requiere certificado). Producción: además
+// cert + key (PEM autorizado) y production: true.
 export function getAfip(): Afip {
-  return new Afip({
+  const cfg: Record<string, unknown> = {
     CUIT: Number(process.env.AFIP_CUIT ?? "20409378472"),
     access_token: process.env.AFIP_ACCESS_TOKEN,
-    production: process.env.AFIP_ENV === "produccion",
-  });
+  };
+  if (process.env.AFIP_ENV === "produccion") {
+    cfg.cert = process.env.AFIP_CERT;
+    cfg.key = process.env.AFIP_KEY;
+    cfg.production = true;
+  }
+  return new Afip(cfg);
 }
 
 export type ReceptorVoucher = {
   docTipo: number; // 99 | 80 | 96
   docNro: number; // 0 en CF
-  condIva: number; // 5 CF | 1 RI
+  condIva: number; // A: 1 RI / 6 Mono… | B: 5 CF / 4 Exento
 };
 
-// yyyymmdd para AFIP.
-function fechaAfip(d = new Date()): string {
-  return d.toISOString().slice(0, 10).replace(/-/g, "");
+// CbteFch como ENTERO (yyyymmdd), en fecha de Argentina (el server corre en UTC,
+// así cerca de medianoche no se adelanta un día).
+function cbteFch(): { entero: number; iso: string } {
+  const iso = new Date().toLocaleDateString("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+  }); // 'yyyy-mm-dd'
+  return { entero: Number(iso.replace(/-/g, "")), iso };
 }
+
+// Condiciones IVA válidas por clase de comprobante (AFIP rechaza combinaciones
+// inválidas: p.ej. Consumidor Final en Factura A → error 10245/10242).
+const COND_A = new Set([1, 6, 13, 16]); // A: Responsable Inscripto / Monotributo
+const COND_B = new Set([4, 5, 7, 8, 9, 10]); // B: Exento / Consumidor Final / etc.
 
 // Arma el objeto data de createVoucher a partir de los ítems de la venta.
 export function armarVoucher(params: {
@@ -656,7 +698,19 @@ export function armarVoucher(params: {
   items: { subtotal: number; iva_pct: number }[];
 }) {
   const { tipo, puntoVenta, numero, receptor, items } = params;
+
+  // Validación clase ↔ receptor.
+  if (tipo === "A") {
+    if (receptor.docTipo !== 80)
+      throw new Error("Factura A requiere CUIT del cliente (DocTipo 80).");
+    if (!COND_A.has(receptor.condIva))
+      throw new Error("Factura A: el receptor debe ser Responsable Inscripto o Monotributo.");
+  } else if (!COND_B.has(receptor.condIva)) {
+    throw new Error("Factura B: condición IVA del receptor inválida.");
+  }
+
   const imp = calcularImportes(items);
+  const fch = cbteFch();
   return {
     voucher: {
       CantReg: 1,
@@ -667,7 +721,7 @@ export function armarVoucher(params: {
       DocNro: receptor.docNro,
       CbteDesde: numero,
       CbteHasta: numero,
-      CbteFch: fechaAfip(),
+      CbteFch: fch.entero,
       ImpTotal: imp.total,
       ImpTotConc: 0,
       ImpNeto: imp.neto,
@@ -680,6 +734,7 @@ export function armarVoucher(params: {
       ...(imp.iva_items.length > 0 ? { Iva: imp.iva_items } : {}),
     },
     importes: imp,
+    fecha: fch.iso, // para el QR (misma fecha del comprobante)
   };
 }
 
