@@ -357,7 +357,7 @@ export function CajaCliente() {
       </div>
 
       <DialogoPeso
-        key={pesable?.id ?? "sin"}
+        key={pesable?.id ?? "sin-peso"}
         producto={pesable}
         onConfirmar={confirmarPeso}
         onCerrar={() => {
@@ -367,7 +367,7 @@ export function CajaCliente() {
       />
 
       <NuevoProductoDialog
-        key={altaCodigo ?? "sin"}
+        key={altaCodigo ?? "sin-alta"}
         abierto={altaCodigo !== null}
         codigoInicial={altaCodigo ?? ""}
         onCerrar={() => {
