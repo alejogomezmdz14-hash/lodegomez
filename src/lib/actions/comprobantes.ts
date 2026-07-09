@@ -29,7 +29,10 @@ const COMP_COLS =
   "cond_iva_receptor,cliente_nombre,neto,iva,exento,total,cae,cae_vto,qr_payload," +
   "estado,error_detalle,emitido_en";
 
-// Emite (o reemite) una factura para una venta.
+// Emite (o reemite) una factura para una venta. Reclama la venta con una fila
+// 'pendiente' ANTES de llamar a AFIP: así el índice único parcial impide la
+// doble-emisión concurrente. La llamada a AFIP no se reintenta a ciegas (solo
+// ante conflicto de numeración 10016).
 export async function emitirComprobante(
   datos: DatosFactura,
 ): Promise<ResultadoComprobante> {
@@ -38,22 +41,10 @@ export async function emitirComprobante(
 
   const admin = createAdminClient();
 
-  // ¿Ya hay comprobante para esta venta? (emitido = no re-facturar; error/pendiente = reusar fila)
-  const { data: existente } = await admin
-    .from("comprobantes")
-    .select("id,estado,intentos")
-    .eq("venta_id", datos.venta_id)
-    .order("creado_en", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (existente && existente.estado === "emitido") {
-    return { ok: false, error: "Esta venta ya está facturada." };
-  }
-
   // Venta + ítems.
   const { data: venta } = await admin
     .from("ventas")
-    .select("id,total")
+    .select("id")
     .eq("id", datos.venta_id)
     .single();
   if (!venta) return { ok: false, error: "No existe la venta." };
@@ -93,7 +84,7 @@ export async function emitirComprobante(
     iva_pct: Number(it.iva_pct),
   }));
 
-  // Pre-armar: valida receptor/clase y calcula importes ANTES de tocar AFIP.
+  // Pre-armar: valida receptor/clase y calcula importes ANTES de reclamar.
   let importes;
   try {
     importes = armarVoucher({
@@ -105,41 +96,6 @@ export async function emitirComprobante(
     }).importes;
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
-  }
-
-  const afip = getAfip();
-
-  // Emitir con reintento ante conflicto de numeración (dos cajas simultáneas).
-  let cae = "";
-  let caeVto = "";
-  let numero = 0;
-  let fechaCbte = "";
-  let ultimoError = "";
-  for (let intento = 0; intento < 3; intento++) {
-    try {
-      const last = (await afip.ElectronicBilling.getLastVoucher(
-        puntoVenta,
-        cbteTipo,
-      )) as number;
-      numero = Number(last) + 1;
-      const armado = armarVoucher({
-        tipo: datos.tipo,
-        puntoVenta,
-        numero,
-        receptor,
-        items: itemsFiscales,
-      });
-      importes = armado.importes;
-      fechaCbte = armado.fecha;
-      const res = await afip.ElectronicBilling.createVoucher(armado.voucher);
-      cae = res.CAE;
-      caeVto = res.CAEFchVto; // yyyy-mm-dd
-      break;
-    } catch (e) {
-      ultimoError = e instanceof Error ? e.message : String(e);
-      // Reintentar solo si es conflicto de numeración; si no, cortar.
-      if (!/n.mero|number|10016|no se corresponde/i.test(ultimoError)) break;
-    }
   }
 
   const base = {
@@ -159,17 +115,102 @@ export async function emitirComprobante(
     emitido_por: u.id,
   };
 
+  // === Reclamar la venta con una fila 'pendiente' ANTES de AFIP ===
+  const { data: existente } = await admin
+    .from("comprobantes")
+    .select("id,estado,intentos")
+    .eq("venta_id", datos.venta_id)
+    .order("creado_en", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let rowId: string;
+  let intentosPrevios = 0;
+  if (existente) {
+    if (existente.estado === "emitido")
+      return { ok: false, error: "Esta venta ya está facturada." };
+    // Reusar la fila previa (error/pendiente) reclamándola como 'pendiente'.
+    intentosPrevios = existente.intentos ?? 0;
+    const { error: eClaim } = await admin
+      .from("comprobantes")
+      .update({
+        ...base,
+        estado: "pendiente",
+        numero: null,
+        cae: null,
+        cae_vto: null,
+        qr_payload: null,
+        error_detalle: null,
+      })
+      .eq("id", existente.id);
+    if (eClaim) return { ok: false, error: "No se pudo iniciar la emisión." };
+    rowId = existente.id;
+  } else {
+    // Insertar 'pendiente': si otra emisión concurrente ya insertó una fila
+    // pendiente/emitido para esta venta, el índice único la rechaza y cortamos.
+    const { data: ins, error: eIns } = await admin
+      .from("comprobantes")
+      .insert({ ...base, estado: "pendiente" })
+      .select("id")
+      .single();
+    if (eIns || !ins)
+      return {
+        ok: false,
+        error: "Ya hay una factura en curso o emitida para esta venta.",
+      };
+    rowId = ins.id;
+  }
+
+  // === Emitir en AFIP (reintento SOLO por conflicto de numeración 10016) ===
+  const afip = getAfip();
+  let cae = "";
+  let caeVto = "";
+  let numero = 0;
+  let fechaCbte = "";
+  let ultimoError = "";
+  for (let intento = 0; intento < 3; intento++) {
+    try {
+      const last = (await afip.ElectronicBilling.getLastVoucher(
+        puntoVenta,
+        cbteTipo,
+      )) as number;
+      numero = Number(last) + 1;
+      const armado = armarVoucher({
+        tipo: datos.tipo,
+        puntoVenta,
+        numero,
+        receptor,
+        items: itemsFiscales,
+      });
+      fechaCbte = armado.fecha;
+      const res = await afip.ElectronicBilling.createVoucher(armado.voucher);
+      cae = res.CAE;
+      caeVto = res.CAEFchVto; // yyyy-mm-dd
+      break;
+    } catch (e) {
+      ultimoError = e instanceof Error ? e.message : String(e);
+      // Solo el conflicto de numeración se reintenta. Cualquier otro error
+      // (incluida una respuesta perdida) corta: NO re-emitir a ciegas.
+      if (!/10016|no se corresponde/i.test(ultimoError)) break;
+    }
+  }
+
   if (!cae) {
-    await upsertComprobante(admin, existente?.id, {
-      ...base,
-      estado: "error",
-      error_detalle: ultimoError || "No se pudo emitir",
-      intentos: (existente?.intentos ?? 0) + 1,
-    });
+    // Guardar 'error' registrando el numero intentado (para reconciliar a futuro
+    // con FECompConsultar si AFIP llegó a autorizarlo — pendiente, fuera de MVP).
+    await admin
+      .from("comprobantes")
+      .update({
+        estado: "error",
+        error_detalle: ultimoError || "No se pudo emitir",
+        intentos: intentosPrevios + 1,
+        numero: numero || null,
+      })
+      .eq("id", rowId);
     return { ok: false, error: `AFIP: ${ultimoError || "no se pudo emitir"}` };
   }
 
-  // Éxito → armar QR (misma fecha del comprobante) y guardar emitido.
+  // Éxito → QR (misma fecha del comprobante) y marcar 'emitido'.
   const qrPayload = construirQrPayload({
     fecha: fechaCbte,
     cuit: afipCuit(),
@@ -182,20 +223,20 @@ export async function emitirComprobante(
     cae,
   });
 
-  const { data: guardado, error: eGuardar } = await upsertComprobante(
-    admin,
-    existente?.id,
-    {
-      ...base,
+  const { data: guardado, error: eGuardar } = await admin
+    .from("comprobantes")
+    .update({
+      estado: "emitido",
       numero,
       cae,
       cae_vto: caeVto,
       qr_payload: qrPayload,
-      estado: "emitido",
       error_detalle: null,
       emitido_en: new Date().toISOString(),
-    },
-  );
+    })
+    .eq("id", rowId)
+    .select(COMP_COLS)
+    .single();
   if (eGuardar || !guardado) {
     return {
       ok: false,
@@ -204,29 +245,10 @@ export async function emitirComprobante(
   }
 
   const svg = await qrSvg(qrUrl(qrPayload));
-  // `guardado` proviene de un .select() con string no-literal (COMP_COLS es una
-  // concatenación), así que postgrest-js lo tipa como GenericStringError. En
-  // runtime es la fila real; cast angosto vía unknown, sin cambiar el payload.
   return {
     ok: true,
     data: { comprobante: guardado as unknown as Comprobante, qr_svg: svg },
   };
-}
-
-async function upsertComprobante(
-  admin: ReturnType<typeof createAdminClient>,
-  id: string | undefined,
-  fields: Record<string, unknown>,
-) {
-  if (id) {
-    return admin
-      .from("comprobantes")
-      .update(fields)
-      .eq("id", id)
-      .select(COMP_COLS)
-      .single();
-  }
-  return admin.from("comprobantes").insert(fields).select(COMP_COLS).single();
 }
 
 // Reintenta un comprobante que quedó en error (mismo path de emisión).
@@ -238,7 +260,8 @@ export async function reintentarComprobante(
   return emitirComprobante({ venta_id: ventaId, tipo, cliente_id: clienteId });
 }
 
-// Estado fiscal de una lista de ventas (para la pantalla de ventas).
+// Estado fiscal de una lista de ventas (para la pantalla de ventas). Un
+// 'emitido' siempre gana (nunca lo pisa un error/pendiente si coexistieran).
 export async function estadosFiscales(
   ventaIds: string[],
 ): Promise<Record<string, { estado: string; tipo: string | null }>> {
@@ -250,10 +273,9 @@ export async function estadosFiscales(
     .in("venta_id", ventaIds);
   const map: Record<string, { estado: string; tipo: string | null }> = {};
   for (const c of data ?? []) {
-    map[c.venta_id as string] = {
-      estado: c.estado as string,
-      tipo: c.tipo as string,
-    };
+    const vid = c.venta_id as string;
+    if (map[vid]?.estado === "emitido") continue; // no pisar un emitido
+    map[vid] = { estado: c.estado as string, tipo: c.tipo as string };
   }
   return map;
 }
