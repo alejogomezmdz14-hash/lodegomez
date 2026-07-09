@@ -29,6 +29,13 @@ const COMP_COLS =
   "cond_iva_receptor,cliente_nombre,neto,iva,exento,total,cae,cae_vto,qr_payload," +
   "estado,error_detalle,emitido_en";
 
+// AFIP devuelve fechas como yyyymmdd (número o string); el QR y la DB usan
+// yyyy-mm-dd.
+function fechaAfipAIso(v: number | string): string {
+  const s = String(v);
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+}
+
 // Emite (o reemite) una factura para una venta. Reclama la venta con una fila
 // 'pendiente' ANTES de llamar a AFIP: así el índice único parcial impide la
 // doble-emisión concurrente. La llamada a AFIP no se reintenta a ciegas (solo
@@ -118,7 +125,7 @@ export async function emitirComprobante(
   // === Reclamar la venta con una fila 'pendiente' ANTES de AFIP ===
   const { data: existente } = await admin
     .from("comprobantes")
-    .select("id,estado,intentos")
+    .select("id,estado,intentos,numero")
     .eq("venta_id", datos.venta_id)
     .order("creado_en", { ascending: false })
     .limit(1)
@@ -129,6 +136,90 @@ export async function emitirComprobante(
   if (existente) {
     if (existente.estado === "emitido")
       return { ok: false, error: "Esta venta ya está facturada." };
+
+    // === Reconciliar con AFIP ANTES de reintentar (anti doble-CAE) ===
+    // Un intento previo pudo haber sido AUTORIZADO por AFIP aunque la respuesta
+    // se perdiera (o falló el guardado): la fila quedó error/pendiente con un
+    // 'numero' guardado que YA tiene CAE en AFIP. Reemitir a ciegas pediría un
+    // segundo CAE para la misma venta (doble IVA declarado). Consultamos ese
+    // número: si ya está autorizado lo adoptamos; si no existe, seguimos; si no
+    // se puede verificar (AFIP/red caída), NO emitimos.
+    if (existente.numero != null) {
+      const afipRec = getAfip();
+      let info: {
+        CodAutorizacion?: string | number;
+        FchVto?: string | number;
+        CbteFch?: string | number;
+      } | null;
+      try {
+        info = (await afipRec.ElectronicBilling.getVoucherInfo(
+          existente.numero,
+          puntoVenta,
+          cbteTipo,
+        )) as {
+          CodAutorizacion?: string | number;
+          FchVto?: string | number;
+          CbteFch?: string | number;
+        } | null;
+      } catch {
+        // Inconcluso: no sabemos si AFIP autorizó ese número. NO emitir.
+        return {
+          ok: false,
+          error:
+            "No se pudo verificar el estado en AFIP. Reintentá cuando haya conexión.",
+        };
+      }
+
+      if (info && info.CodAutorizacion) {
+        // Ya autorizado en AFIP → adoptarlo tal cual, sin re-emitir.
+        const caeAdopt = String(info.CodAutorizacion);
+        const caeVtoAdopt = info.FchVto ? fechaAfipAIso(info.FchVto) : "";
+        const fechaAdopt = info.CbteFch ? fechaAfipAIso(info.CbteFch) : "";
+        const qrPayloadAdopt = construirQrPayload({
+          fecha: fechaAdopt,
+          cuit: afipCuit(),
+          ptoVta: puntoVenta,
+          tipoCmp: cbteTipo,
+          nroCmp: existente.numero,
+          importe: importes.total,
+          docTipoRec: receptor.docTipo,
+          docNroRec: receptor.docNro,
+          cae: caeAdopt,
+        });
+        const { data: adoptado, error: eAdopt } = await admin
+          .from("comprobantes")
+          .update({
+            ...base,
+            estado: "emitido",
+            numero: existente.numero,
+            cae: caeAdopt,
+            cae_vto: caeVtoAdopt,
+            qr_payload: qrPayloadAdopt,
+            error_detalle: null,
+            emitido_en: new Date().toISOString(),
+          })
+          .eq("id", existente.id)
+          .select(COMP_COLS)
+          .single();
+        if (eAdopt || !adoptado) {
+          return {
+            ok: false,
+            error:
+              "Se emitió en AFIP pero falló el guardado. Revisá la venta.",
+          };
+        }
+        const svgAdopt = await qrSvg(qrUrl(qrPayloadAdopt));
+        return {
+          ok: true,
+          data: {
+            comprobante: adoptado as unknown as Comprobante,
+            qr_svg: svgAdopt,
+          },
+        };
+      }
+      // info === null → ese número nunca se autorizó en AFIP → seguir normal.
+    }
+
     // Reusar la fila previa (error/pendiente) reclamándola como 'pendiente'.
     intentosPrevios = existente.intentos ?? 0;
     const { error: eClaim } = await admin
@@ -256,6 +347,8 @@ export async function emitirComprobante(
 export async function reintentarComprobante(
   ventaId: string,
 ): Promise<ResultadoComprobante> {
+  const u = await getUsuarioActual();
+  if (!u) return { ok: false, error: "No autorizado" };
   const admin = createAdminClient();
   const { data: c } = await admin
     .from("comprobantes")
@@ -277,6 +370,8 @@ export async function reintentarComprobante(
 export async function estadosFiscales(
   ventaIds: string[],
 ): Promise<Record<string, { estado: string; tipo: string | null }>> {
+  const u = await getUsuarioActual();
+  if (!u) return {};
   if (ventaIds.length === 0) return {};
   const admin = createAdminClient();
   const { data } = await admin
