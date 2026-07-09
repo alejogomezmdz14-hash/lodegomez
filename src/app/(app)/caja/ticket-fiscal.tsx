@@ -38,6 +38,14 @@ export function TicketFiscal({
           <span>CUIT {EMISOR.cuit}</span>
           <span>Ing. Brutos {EMISOR.ingresosBrutos}</span>
           <span>In. Act. {EMISOR.inicioActividades}</span>
+          {c.emitido_en ? (
+            <span>
+              Fecha{" "}
+              {new Date(c.emitido_en).toLocaleDateString("es-AR", {
+                timeZone: "America/Argentina/Buenos_Aires",
+              })}
+            </span>
+          ) : null}
         </div>
 
         <div className="my-2 border-t border-dashed border-black" />

@@ -21,6 +21,7 @@ export function ClientesCliente({ clientesIniciales }: { clientesIniciales: Clie
 
       {(nuevo || editando) && (
         <FormularioCliente
+          key={editando?.id ?? "nuevo"}
           cliente={editando}
           onGuardado={() => { setNuevo(false); setEditando(null); router.refresh(); }}
           onCancelar={() => { setNuevo(false); setEditando(null); }}

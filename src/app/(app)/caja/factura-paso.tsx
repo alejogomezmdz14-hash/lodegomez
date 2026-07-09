@@ -109,7 +109,15 @@ function AltaRapida({
 
   if (!abierto) {
     return (
-      <Button variant="outline" size="sm" disabled={disabled} onClick={() => setAbierto(true)}>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={disabled}
+        onClick={() => {
+          setCuit(sugerencia.replace(/\D/g, ""));
+          setAbierto(true);
+        }}
+      >
         + Cliente nuevo
       </Button>
     );
