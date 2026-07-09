@@ -1,10 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
+import { estadosFiscales } from "@/lib/actions/comprobantes";
 import { VentasCliente } from "./ventas-cliente";
 import type { VentaListado } from "@/lib/types";
 
 export default async function VentasPage() {
   const supabase = await createClient();
   const { data } = await supabase.rpc("listar_ventas", { p_limite: 50 });
+  const ventas = (data as VentaListado[] | null) ?? [];
+  const fiscales = await estadosFiscales(ventas.map((v) => v.id));
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -14,7 +17,7 @@ export default async function VentasPage() {
           Tocá un ticket para ver sus productos. Anular avisa a los dueños y queda registrado.
         </p>
       </div>
-      <VentasCliente ventasIniciales={(data as VentaListado[] | null) ?? []} />
+      <VentasCliente ventasIniciales={ventas} fiscales={fiscales} />
     </div>
   );
 }

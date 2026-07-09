@@ -251,13 +251,25 @@ export async function emitirComprobante(
   };
 }
 
-// Reintenta un comprobante que quedó en error (mismo path de emisión).
+// Reintenta el comprobante de una venta reusando su tipo y cliente guardados
+// (no convierte una Factura A fallida en B).
 export async function reintentarComprobante(
   ventaId: string,
-  tipo: TipoFactura,
-  clienteId?: string,
-) {
-  return emitirComprobante({ venta_id: ventaId, tipo, cliente_id: clienteId });
+): Promise<ResultadoComprobante> {
+  const admin = createAdminClient();
+  const { data: c } = await admin
+    .from("comprobantes")
+    .select("tipo,cliente_id")
+    .eq("venta_id", ventaId)
+    .order("creado_en", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!c) return { ok: false, error: "No hay comprobante para reintentar." };
+  return emitirComprobante({
+    venta_id: ventaId,
+    tipo: c.tipo as TipoFactura,
+    cliente_id: (c.cliente_id as string | null) ?? undefined,
+  });
 }
 
 // Estado fiscal de una lista de ventas (para la pantalla de ventas). Un

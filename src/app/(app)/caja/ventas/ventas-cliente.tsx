@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { ChevronDown, ChevronRight, Printer } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { anularVenta } from "@/lib/actions/ventas";
+import { emitirComprobante, reintentarComprobante } from "@/lib/actions/comprobantes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { pesos, cantidadStr } from "@/lib/formato";
@@ -30,8 +31,10 @@ const ITEM_COLS = "codigo,descripcion,cantidad,es_pesable,precio_unit,subtotal";
 
 export function VentasCliente({
   ventasIniciales,
+  fiscales,
 }: {
   ventasIniciales: VentaListado[];
+  fiscales: Record<string, { estado: string; tipo: string | null }>;
 }) {
   const router = useRouter();
   const [supabase] = useState(() => createClient());
@@ -146,6 +149,38 @@ export function VentasCliente({
   const medioLabel = (m: string) =>
     MEDIOS_PAGO.find((x) => x.valor === m)?.label ?? m;
 
+  function etiquetaFiscal(id: string): string {
+    const f = fiscales[id];
+    if (!f) return "Sin factura";
+    if (f.estado === "emitido") return `Factura ${f.tipo}`;
+    if (f.estado === "pendiente") return "Pendiente";
+    return "Error";
+  }
+
+  function facturarB(v: VentaListado) {
+    startTransition(async () => {
+      const res = await emitirComprobante({ venta_id: v.id, tipo: "B" });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(`Factura B emitida para #${v.ticket_nro}`);
+      router.refresh();
+    });
+  }
+
+  function reintentar(v: VentaListado) {
+    startTransition(async () => {
+      const res = await reintentarComprobante(v.id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(`Factura reemitida para #${v.ticket_nro}`);
+      router.refresh();
+    });
+  }
+
   return (
     <>
       <div className="flex flex-col gap-4 print:hidden">
@@ -220,6 +255,7 @@ export function VentasCliente({
                   <th className="px-4 py-3 font-medium">Empleado</th>
                   <th className="px-4 py-3 font-medium">Medio</th>
                   <th className="px-4 py-3 text-right font-medium">Total</th>
+                  <th className="px-4 py-3 font-medium">Fiscal</th>
                   <th className="px-4 py-3 font-medium">Estado</th>
                   <th className="px-4 py-3 text-right font-medium">Acción</th>
                 </tr>
@@ -256,6 +292,11 @@ export function VentasCliente({
                           {pesos(Number(v.total))}
                         </td>
                         <td className="px-4 py-3">
+                          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                            {etiquetaFiscal(v.id)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
                           <span
                             className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                               v.estado === "activa"
@@ -267,25 +308,55 @@ export function VentasCliente({
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          {puedeAnular ? (
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              disabled={pending}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                anular(v);
-                              }}
-                            >
-                              Anular
-                            </Button>
-                          ) : null}
+                          <div className="flex justify-end gap-2">
+                            {v.estado === "activa" && etiquetaFiscal(v.id) === "Sin factura" ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={pending}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  facturarB(v);
+                                }}
+                              >
+                                Facturar
+                              </Button>
+                            ) : null}
+                            {v.estado === "activa" &&
+                            (etiquetaFiscal(v.id) === "Error" ||
+                              etiquetaFiscal(v.id) === "Pendiente") ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={pending}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  reintentar(v);
+                                }}
+                              >
+                                Reintentar
+                              </Button>
+                            ) : null}
+                            {puedeAnular ? (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                disabled={pending}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  anular(v);
+                                }}
+                              >
+                                Anular
+                              </Button>
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                       {abierto ? (
                         <tr className="border-b bg-muted/30 last:border-0">
                           <td></td>
-                          <td colSpan={7} className="px-4 py-2">
+                          <td colSpan={8} className="px-4 py-2">
                             {cargando === v.id ? (
                               <p className="text-muted-foreground">Cargando…</p>
                             ) : (items[v.id]?.length ?? 0) === 0 ? (
