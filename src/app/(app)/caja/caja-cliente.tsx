@@ -256,9 +256,9 @@ export function CajaCliente() {
 
   return (
     <>
-      <div className="flex flex-1 flex-col print:hidden lg:flex-row">
+      <div className="flex h-full min-h-0 flex-col print:hidden lg:flex-row">
         {/* Captura: código + buscador */}
-        <section className="flex flex-col gap-3 border-b p-4 lg:w-96 lg:shrink-0 lg:border-b-0 lg:border-r">
+        <section className="flex shrink-0 flex-col gap-3 border-b p-4 lg:w-96 lg:shrink-0 lg:border-b-0 lg:border-r">
           <form onSubmit={onSubmitCodigo}>
             <Input
               ref={codigoRef}
@@ -284,7 +284,7 @@ export function CajaCliente() {
 
         {/* Carrito + cobro */}
         <section className="flex min-h-0 flex-1 flex-col p-4">
-          <div className="mb-1 flex items-center justify-between">
+          <div className="mb-1 flex shrink-0 items-center justify-between">
             <span className="text-sm text-muted-foreground">
               {items.length} ítem{items.length === 1 ? "" : "s"}
             </span>
@@ -305,7 +305,7 @@ export function CajaCliente() {
 
           <Carrito items={items} onInc={inc} onDec={dec} onQuitar={quitar} />
 
-          <div className="mt-3 flex flex-col gap-3 border-t pt-3">
+          <div className="mt-3 flex shrink-0 flex-col gap-3 border-t pt-3">
             <div className="flex items-baseline justify-between">
               <span className="text-lg">Total</span>
               <span className="text-3xl font-bold tabular-nums">

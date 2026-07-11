@@ -25,7 +25,7 @@ export function Carrito({
   }
 
   return (
-    <ul className="flex flex-1 flex-col divide-y overflow-y-auto">
+    <ul className="flex min-h-0 flex-1 flex-col divide-y overflow-y-auto">
       {items.map((it, i) => (
         <li key={i} className="flex items-center gap-3 py-3">
           <div className="min-w-0 flex-1">

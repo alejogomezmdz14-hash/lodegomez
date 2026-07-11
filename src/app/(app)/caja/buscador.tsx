@@ -58,7 +58,7 @@ export function Buscador({
         className="h-11 text-base"
       />
       {resultados.length > 0 ? (
-        <ul className="flex min-h-0 flex-col gap-1 overflow-y-auto rounded-lg border p-1">
+        <ul className="flex max-h-[50vh] min-h-0 flex-col gap-1 overflow-y-auto rounded-lg border p-1">
           {resultados.map((p) => (
             <li key={p.id}>
               <button

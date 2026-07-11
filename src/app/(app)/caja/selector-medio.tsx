@@ -18,10 +18,10 @@ export function SelectorMedio({
           type="button"
           onClick={() => onChange(m.valor)}
           className={cn(
-            "rounded-lg border-2 px-3 py-3 text-base font-semibold transition-colors",
+            "rounded-lg border-2 px-3 py-4 text-lg font-semibold transition-colors",
             value === m.valor
-              ? "border-primary bg-primary text-primary-foreground"
-              : "border-border hover:bg-accent",
+              ? "border-primary bg-primary text-primary-foreground shadow-sm"
+              : "border-border bg-background hover:border-primary/50 hover:bg-accent",
           )}
         >
           {m.label}
