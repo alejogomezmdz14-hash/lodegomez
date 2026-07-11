@@ -62,6 +62,48 @@ export async function actualizarProducto(
   };
 }
 
+export type ResultadoSimple = { ok: true } | { ok: false; error: string };
+
+// Desactiva o reactiva un producto (borrado "recuperable"). Cualquier usuario
+// provisionado puede; el trigger de auditoría registra el cambio de `activo`.
+export async function setProductoActivo(
+  id: string,
+  activo: boolean,
+): Promise<ResultadoSimple> {
+  const u = await getUsuarioActual();
+  if (!u) return { ok: false, error: "No autorizado" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("productos")
+    .update({ activo })
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "No se pudo (sin permiso)." };
+  return { ok: true };
+}
+
+// Borra un producto de forma definitiva. El historial de ventas se conserva
+// (venta_items.producto_id → set null, con copia del código/descripción).
+export async function borrarProducto(id: string): Promise<ResultadoSimple> {
+  const u = await getUsuarioActual();
+  if (!u) return { ok: false, error: "No autorizado" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("productos")
+    .delete()
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!data)
+    return { ok: false, error: "No se pudo borrar (ya no existe o sin permiso)." };
+  return { ok: true };
+}
+
 export type NuevoProducto = {
   codigo: string;
   descripcion: string;

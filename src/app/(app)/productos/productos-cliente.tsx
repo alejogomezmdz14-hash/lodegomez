@@ -2,9 +2,13 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Plus, Download } from "lucide-react";
+import { Plus, Download, Trash2, EyeOff, RotateCcw } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { actualizarProducto } from "@/lib/actions/productos";
+import {
+  actualizarProducto,
+  setProductoActivo,
+  borrarProducto,
+} from "@/lib/actions/productos";
 import { NuevoProductoDialog } from "@/components/nuevo-producto-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -18,6 +22,7 @@ export function ProductosCliente() {
   const [supabase] = useState(() => createClient());
   const [nuevoAbierto, setNuevoAbierto] = useState(false);
   const [exportando, setExportando] = useState(false);
+  const [verDesactivados, setVerDesactivados] = useState(false);
 
   useEffect(() => {
     const q = term.trim();
@@ -35,7 +40,7 @@ export function ProductosCliente() {
         .from("productos")
         .select("*")
         .ilike("descripcion", `%${q}%`)
-        .eq("activo", true)
+        .eq("activo", !verDesactivados)
         .order("descripcion")
         .limit(30);
       if (!cancelado) {
@@ -47,7 +52,11 @@ export function ProductosCliente() {
       cancelado = true;
       clearTimeout(t);
     };
-  }, [term, supabase]);
+  }, [term, supabase, verDesactivados]);
+
+  function quitar(id: string) {
+    setResultados((prev) => prev.filter((x) => x.id !== id));
+  }
 
   async function exportar() {
     setExportando(true);
@@ -97,7 +106,11 @@ export function ProductosCliente() {
         <Input
           value={term}
           onChange={(e) => setTerm(e.target.value)}
-          placeholder="Buscar producto por nombre…"
+          placeholder={
+            verDesactivados
+              ? "Buscar entre los desactivados…"
+              : "Buscar producto por nombre…"
+          }
           className="h-11 max-w-md text-base"
         />
         <Button onClick={() => setNuevoAbierto(true)}>
@@ -106,17 +119,27 @@ export function ProductosCliente() {
         <Button variant="outline" onClick={exportar} disabled={exportando}>
           <Download className="h-4 w-4" /> {exportando ? "Exportando…" : "Exportar"}
         </Button>
+        <Button
+          variant={verDesactivados ? "default" : "outline"}
+          onClick={() => setVerDesactivados((v) => !v)}
+          title="Ver los productos desactivados para recuperarlos o borrarlos"
+        >
+          <EyeOff className="h-4 w-4" />{" "}
+          {verDesactivados ? "Viendo desactivados" : "Ver desactivados"}
+        </Button>
       </div>
 
       {resultados.length === 0 && term.trim().length >= 2 && !buscando ? (
         <p className="text-sm text-muted-foreground">
-          Sin resultados. Podés darlo de alta con “Nuevo producto”.
+          {verDesactivados
+            ? "No hay productos desactivados con ese nombre."
+            : "Sin resultados. Podés darlo de alta con “Nuevo producto”."}
         </p>
       ) : null}
 
       <div className="flex flex-col divide-y">
         {resultados.map((p) => (
-          <FilaProducto key={p.id} producto={p} />
+          <FilaProducto key={p.id} producto={p} onQuitar={quitar} />
         ))}
       </div>
 
@@ -133,7 +156,13 @@ export function ProductosCliente() {
   );
 }
 
-function FilaProducto({ producto }: { producto: Producto }) {
+function FilaProducto({
+  producto,
+  onQuitar,
+}: {
+  producto: Producto;
+  onQuitar: (id: string) => void;
+}) {
   const iP = String(producto.precio_venta ?? "");
   const iC = String(producto.precio_costo ?? "");
   const iS = String(producto.stock ?? "");
@@ -144,8 +173,11 @@ function FilaProducto({ producto }: { producto: Producto }) {
   const [gC, setGC] = useState(iC);
   const [gS, setGS] = useState(iS);
   const [pending, startTransition] = useTransition();
+  const [accion, startAccion] = useTransition();
+  const [confirmandoBorrar, setConfirmandoBorrar] = useState(false);
 
   const cambiado = precio !== gP || costo !== gC || stock !== gS;
+  const activo = producto.activo;
 
   function guardar() {
     const cambios: { precio_venta?: number; precio_costo?: number; stock?: number } = {};
@@ -193,15 +225,58 @@ function FilaProducto({ producto }: { producto: Producto }) {
     });
   }
 
+  function desactivar() {
+    startAccion(async () => {
+      const res = await setProductoActivo(producto.id, false);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      onQuitar(producto.id);
+      toast.success("Desactivado. Está en “Ver desactivados” para recuperarlo.");
+    });
+  }
+
+  function reactivar() {
+    startAccion(async () => {
+      const res = await setProductoActivo(producto.id, true);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      onQuitar(producto.id);
+      toast.success("Reactivado. Ya se puede vender.");
+    });
+  }
+
+  function borrar() {
+    startAccion(async () => {
+      const res = await borrarProducto(producto.id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      onQuitar(producto.id);
+      toast.success("Borrado definitivamente.");
+    });
+  }
+
   const pv = parseNumeroAR(precio) ?? 0;
   const pc = parseNumeroAR(costo) ?? 0;
   const ganancia = pc > 0 ? pv - pc : null;
 
   return (
-    <div className="flex flex-wrap items-end gap-3 py-3">
+    <div
+      className={`flex flex-wrap items-end gap-3 py-3 ${activo ? "" : "opacity-70"}`}
+    >
       <div className="min-w-0 flex-1">
-        <p className="truncate font-medium">
+        <p className="flex items-center gap-2 truncate font-medium">
           {producto.descripcion || producto.codigo}
+          {!activo ? (
+            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+              Desactivado
+            </span>
+          ) : null}
         </p>
         <p className="text-xs text-muted-foreground">
           {producto.codigo}
@@ -238,6 +313,55 @@ function FilaProducto({ producto }: { producto: Producto }) {
       <Button onClick={guardar} disabled={pending || !cambiado}>
         {pending ? "…" : "Guardar"}
       </Button>
+
+      {activo ? (
+        <Button
+          variant="outline"
+          onClick={desactivar}
+          disabled={accion}
+          title="Desactivar (recuperable): se esconde y no se puede vender"
+        >
+          <EyeOff className="h-4 w-4" /> Desactivar
+        </Button>
+      ) : (
+        <Button
+          variant="outline"
+          onClick={reactivar}
+          disabled={accion}
+          title="Volver a activar el producto"
+        >
+          <RotateCcw className="h-4 w-4" /> Reactivar
+        </Button>
+      )}
+
+      {confirmandoBorrar ? (
+        <div className="flex items-center gap-1">
+          <Button
+            onClick={borrar}
+            disabled={accion}
+            className="bg-red-600 text-white hover:bg-red-700"
+          >
+            {accion ? "…" : "Sí, borrar"}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => setConfirmandoBorrar(false)}
+            disabled={accion}
+          >
+            Cancelar
+          </Button>
+        </div>
+      ) : (
+        <Button
+          variant="ghost"
+          onClick={() => setConfirmandoBorrar(true)}
+          disabled={accion}
+          className="text-red-600 hover:bg-red-50 hover:text-red-700"
+          title="Borrar definitivamente (no se puede deshacer)"
+        >
+          <Trash2 className="h-4 w-4" /> Borrar
+        </Button>
+      )}
     </div>
   );
 }
