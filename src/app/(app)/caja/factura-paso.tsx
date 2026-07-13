@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { buscarClientes, crearCliente } from "@/lib/actions/clientes";
 import { emitirComprobante, type ComprobanteImpresion } from "@/lib/actions/comprobantes";
 import { COND_IVA, type Cliente } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 // Condiciones de IVA válidas como receptor de Factura A (no Consumidor Final).
 const COND_IVA_A = COND_IVA.filter((c) => c.valor !== 5);
@@ -25,6 +26,30 @@ export function FacturaPaso({
   const [modoA, setModoA] = useState(false);
   const [q, setQ] = useState("");
   const [resultados, setResultados] = useState<Cliente[]>([]);
+  const [sel, setSel] = useState(0); // 0 Sin factura · 1 Factura B · 2 Factura A
+
+  // Flechas eligen la opción; Enter la confirma (solo en la vista inicial).
+  useEffect(() => {
+    if (modoA) return;
+    function onKey(e: KeyboardEvent) {
+      if (["ArrowLeft", "ArrowUp"].includes(e.key)) {
+        e.preventDefault();
+        setSel((s) => (s + 2) % 3);
+      } else if (["ArrowRight", "ArrowDown"].includes(e.key)) {
+        e.preventDefault();
+        setSel((s) => (s + 1) % 3);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (emitiendo) return;
+        if (sel === 0) onSaltar();
+        else if (sel === 1) emitir("B");
+        else setModoA(true);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modoA, sel, emitiendo]);
 
   async function emitir(tipo: "A" | "B", clienteId?: string) {
     setEmitiendo(true);
@@ -83,16 +108,33 @@ export function FacturaPaso({
     <div className="flex flex-col gap-2">
       <span className="text-sm text-muted-foreground">¿Factura?</span>
       <div className="grid grid-cols-3 gap-2">
-        <Button variant="outline" disabled={emitiendo} onClick={onSaltar} className="h-12">
+        <Button
+          variant="outline"
+          disabled={emitiendo}
+          onClick={onSaltar}
+          className={cn("h-12", sel === 0 && "ring-2 ring-primary ring-offset-1")}
+        >
           Sin factura
         </Button>
-        <Button disabled={emitiendo} onClick={() => emitir("B")} className="h-12">
+        <Button
+          disabled={emitiendo}
+          onClick={() => emitir("B")}
+          className={cn("h-12", sel === 1 && "ring-2 ring-primary ring-offset-1")}
+        >
           Factura B
         </Button>
-        <Button variant="secondary" disabled={emitiendo} onClick={() => setModoA(true)} className="h-12">
+        <Button
+          variant="secondary"
+          disabled={emitiendo}
+          onClick={() => setModoA(true)}
+          className={cn("h-12", sel === 2 && "ring-2 ring-primary ring-offset-1")}
+        >
           Factura A
         </Button>
       </div>
+      <p className="text-center text-xs text-muted-foreground">
+        Flechas ← → para elegir · Enter para confirmar
+      </p>
     </div>
   );
 }
