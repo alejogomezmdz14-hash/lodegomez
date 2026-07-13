@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Plus, Download, Trash2, EyeOff, RotateCcw } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useScanner } from "@/lib/hooks/use-scanner";
 import {
   actualizarProducto,
   setProductoActivo,
@@ -23,12 +24,22 @@ export function ProductosCliente() {
   const [nuevoAbierto, setNuevoAbierto] = useState(false);
   const [exportando, setExportando] = useState(false);
   const [verDesactivados, setVerDesactivados] = useState(false);
+  const buscarRef = useRef<HTMLInputElement>(null);
+
+  // Scanner global: si escaneás con la pistola (aunque el foco no esté en la
+  // caja de búsqueda), el código va al buscador y encuentra el producto.
+  useScanner(
+    (code) => setTerm(code),
+    { enabled: !nuevoAbierto, ignore: () => buscarRef.current },
+  );
 
   useEffect(() => {
     const q = term.trim();
     let cancelado = false;
     const t = setTimeout(async () => {
-      if (q.length < 2) {
+      // Sanitizar para no romper el filtro .or (coma/paréntesis/% son estructurales).
+      const safe = q.replace(/[%,()]/g, " ").trim();
+      if (safe.length < 2) {
         if (!cancelado) {
           setResultados([]);
           setBuscando(false);
@@ -39,7 +50,7 @@ export function ProductosCliente() {
       const { data } = await supabase
         .from("productos")
         .select("*")
-        .ilike("descripcion", `%${q}%`)
+        .or(`descripcion.ilike.%${safe}%,codigo.ilike.%${safe}%`)
         .eq("activo", !verDesactivados)
         .order("descripcion")
         .limit(30);
@@ -104,12 +115,14 @@ export function ProductosCliente() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <Input
+          ref={buscarRef}
+          autoFocus
           value={term}
           onChange={(e) => setTerm(e.target.value)}
           placeholder={
             verDesactivados
-              ? "Buscar entre los desactivados…"
-              : "Buscar producto por nombre…"
+              ? "Buscar desactivados por nombre o código…"
+              : "Buscar por nombre o código — o escaneá"
           }
           className="h-11 max-w-md text-base"
         />
