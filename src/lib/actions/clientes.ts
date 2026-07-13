@@ -19,8 +19,14 @@ export async function buscarClientes(q: string): Promise<Cliente[]> {
   const admin = createAdminClient();
   // Sanitizar: sacar chars que rompen el filtro .or de PostgREST (, ( ) % *).
   const term = q.trim().replace(/[,()%*]/g, " ").trim();
+  // El documento se guarda solo con dígitos → buscar por dígitos para que el
+  // CUIT matchee lo tipees con guiones o sin ellos (20-12345678-9 == 20123456789).
+  const digitos = q.replace(/\D/g, "");
+  const conds: string[] = [];
+  if (term) conds.push(`razon_social.ilike.%${term}%`);
+  if (digitos) conds.push(`doc_nro.ilike.%${digitos}%`);
   let query = admin.from("clientes").select(COLS).order("razon_social").limit(20);
-  if (term) query = query.or(`razon_social.ilike.%${term}%,doc_nro.ilike.%${term}%`);
+  if (conds.length) query = query.or(conds.join(","));
   const { data } = await query;
   return (data as Cliente[] | null) ?? [];
 }

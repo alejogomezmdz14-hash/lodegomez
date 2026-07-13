@@ -6,7 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { buscarClientes, crearCliente } from "@/lib/actions/clientes";
 import { emitirComprobante, type ComprobanteImpresion } from "@/lib/actions/comprobantes";
-import type { Cliente } from "@/lib/types";
+import { COND_IVA, type Cliente } from "@/lib/types";
+
+// Condiciones de IVA válidas como receptor de Factura A (no Consumidor Final).
+const COND_IVA_A = COND_IVA.filter((c) => c.valor !== 5);
 
 // Panel post-venta: elegir tipo de factura y (para A) el cliente.
 export function FacturaPaso({
@@ -106,6 +109,9 @@ function AltaRapida({
   const [abierto, setAbierto] = useState(false);
   const [razon, setRazon] = useState("");
   const [cuit, setCuit] = useState(sugerencia.replace(/\D/g, ""));
+  const [domicilio, setDomicilio] = useState("");
+  const [condIva, setCondIva] = useState(1); // Responsable Inscripto por defecto
+  const [guardando, setGuardando] = useState(false);
 
   if (!abierto) {
     return (
@@ -125,22 +131,48 @@ function AltaRapida({
   return (
     <div className="flex flex-col gap-2 rounded-lg border p-2">
       <Input value={razon} onChange={(e) => setRazon(e.target.value)} placeholder="Razón social" className="h-10" />
-      <Input value={cuit} onChange={(e) => setCuit(e.target.value)} placeholder="CUIT" className="h-10" inputMode="numeric" />
+      <Input
+        value={cuit}
+        onChange={(e) => setCuit(e.target.value)}
+        placeholder="CUIT (con o sin guiones)"
+        className="h-10"
+        inputMode="numeric"
+      />
+      <Input
+        value={domicilio}
+        onChange={(e) => setDomicilio(e.target.value)}
+        placeholder="Domicilio"
+        className="h-10"
+      />
+      <select
+        value={condIva}
+        onChange={(e) => setCondIva(Number(e.target.value))}
+        className="h-10 rounded-lg border-2 border-border bg-background px-2 text-sm"
+      >
+        {COND_IVA_A.map((c) => (
+          <option key={c.valor} value={c.valor}>
+            {c.label}
+          </option>
+        ))}
+      </select>
       <Button
         size="sm"
-        disabled={disabled}
+        disabled={disabled || guardando}
         onClick={async () => {
+          setGuardando(true);
           const res = await crearCliente({
             doc_tipo: 80,
             doc_nro: cuit,
             razon_social: razon,
-            cond_iva: 1, // Responsable Inscripto (Factura A)
+            domicilio: domicilio || undefined,
+            cond_iva: condIva,
           });
+          setGuardando(false);
           if (!res.ok) return toast.error(res.error);
           onCreado(res.cliente);
         }}
       >
-        Guardar y facturar
+        {guardando ? "Guardando…" : "Guardar y facturar"}
       </Button>
     </div>
   );
