@@ -11,6 +11,10 @@ export const MEDIOS_PAGO: { valor: MedioPago; label: string }[] = [
   { valor: "transferencia", label: "Transferencia" },
 ];
 
+// Medios ofrecidos al cobrar (sin QR; en su lugar va "Dividir pago").
+// MEDIOS_PAGO se mantiene completo para etiquetar ventas históricas con QR.
+export const MEDIOS_COBRO = MEDIOS_PAGO.filter((m) => m.valor !== "qr");
+
 // Columnas exactas de public.productos (migración 0001).
 export type Producto = {
   id: string;

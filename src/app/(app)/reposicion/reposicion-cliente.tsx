@@ -2,7 +2,7 @@
 
 import { type FormEvent, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Trash2, EyeOff, RotateCcw, Settings2 } from "lucide-react";
+import { Trash2, ChevronDown, ChevronRight, Settings2, EyeOff, Eye } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,15 @@ import type {
   FaltanteManual,
   RubroConfig,
 } from "@/lib/types";
+
+type ProductoRubro = {
+  id: string;
+  codigo: string;
+  descripcion: string | null;
+  stock: number;
+  stock_minimo: number | null;
+  excluir_reposicion: boolean;
+};
 
 export function ReposicionCliente() {
   const [supabase] = useState(() => createClient());
@@ -23,8 +32,6 @@ export function ReposicionCliente() {
 
   const [config, setConfig] = useState(false);
   const [rubros, setRubros] = useState<RubroConfig[]>([]);
-  const [verExcluidos, setVerExcluidos] = useState(false);
-  const [excluidos, setExcluidos] = useState<ProductoReponer[]>([]);
 
   async function recargarBajo() {
     const { data } = await supabase.rpc("productos_a_reponer");
@@ -58,77 +65,6 @@ export function ReposicionCliente() {
       const { data } = await supabase.rpc("rubros_reposicion");
       setRubros((data as RubroConfig[] | null) ?? []);
     }
-  }
-
-  function aplicarMinimo(rubro: string, valor: string) {
-    const n = valor.trim() === "" ? 0 : parseInt(valor, 10);
-    if (Number.isNaN(n) || n < 0) {
-      toast.error("Poné un número válido");
-      return;
-    }
-    startTransition(async () => {
-      const { error } = await supabase.rpc("set_minimo_rubro", {
-        p_rubro: rubro,
-        p_minimo: n,
-      });
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
-      setRubros((prev) =>
-        prev.map((r) =>
-          r.rubro === rubro ? { ...r, minimo_actual: n > 0 ? n : null } : r,
-        ),
-      );
-      toast.success(
-        n > 0
-          ? `${rubro}: mínimo ${n}`
-          : `${rubro}: sin mínimo (fuera de reposición)`,
-      );
-      await recargarBajo();
-    });
-  }
-
-  function excluir(p: ProductoReponer) {
-    setBajo((prev) => prev.filter((x) => x.id !== p.id));
-    startTransition(async () => {
-      const { error } = await supabase.rpc("set_excluir_reposicion", {
-        p_id: p.id,
-        p_excluir: true,
-      });
-      if (error) {
-        toast.error(error.message);
-        await recargarBajo();
-        return;
-      }
-      toast.success(`${p.descripcion ?? p.codigo} fuera de reposición`);
-      setExcluidos([]); // se recarga al abrir
-    });
-  }
-
-  async function verExcluidosToggle() {
-    const nuevoVal = !verExcluidos;
-    setVerExcluidos(nuevoVal);
-    if (nuevoVal) {
-      const { data } = await supabase.rpc("productos_excluidos");
-      setExcluidos((data as ProductoReponer[] | null) ?? []);
-    }
-  }
-
-  function reincluir(p: ProductoReponer) {
-    setExcluidos((prev) => prev.filter((x) => x.id !== p.id));
-    startTransition(async () => {
-      const { error } = await supabase.rpc("set_excluir_reposicion", {
-        p_id: p.id,
-        p_excluir: false,
-      });
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
-      toast.success(`${p.descripcion ?? p.codigo} vuelve a reposición`);
-      await recargarBajo();
-    });
   }
 
   function agregar(e: FormEvent) {
@@ -203,55 +139,30 @@ export function ReposicionCliente() {
             Abrir WhatsApp
           </Button>
         </a>
-        <Button variant="outline" onClick={abrirConfig}>
-          <Settings2 className="h-4 w-4" /> Mínimos por rubro
-        </Button>
-        <Button variant="outline" onClick={verExcluidosToggle}>
-          <EyeOff className="h-4 w-4" />{" "}
-          {verExcluidos ? "Ocultar excluidos" : "Ver excluidos"}
+        <Button variant={config ? "default" : "outline"} onClick={abrirConfig}>
+          <Settings2 className="h-4 w-4" /> Configurar por rubro
         </Button>
       </div>
 
-      {/* Config de mínimos por rubro */}
+      {/* Acordeón por rubro */}
       {config ? (
-        <section className="flex flex-col gap-2 rounded-xl border p-4">
-          <p className="text-sm font-medium">Punto de reposición por rubro</p>
+        <section className="flex flex-col gap-2 rounded-xl border p-3">
+          <p className="text-sm font-medium">Rubros</p>
           <p className="text-xs text-muted-foreground">
-            El número se aplica a todos los productos del rubro. 0 = sin mínimo
-            (ese rubro no entra a la reposición).
+            Tocá un rubro para ver sus productos. Ponés el mínimo (cuánto tiene que
+            quedar para reponer) por producto o de todo el rubro de una, y podés
+            sacar de la reposición lo de temporada.
           </p>
-          <div className="mt-1 grid max-h-96 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+          <div className="flex flex-col divide-y">
             {rubros.map((r) => (
-              <FilaRubro key={r.rubro} rubro={r} onAplicar={aplicarMinimo} pending={pending} />
+              <RubroAcordeon
+                key={r.rubro}
+                rubro={r}
+                supabase={supabase}
+                onCambio={recargarBajo}
+              />
             ))}
           </div>
-        </section>
-      ) : null}
-
-      {/* Excluidos (temporada) */}
-      {verExcluidos ? (
-        <section className="flex flex-col gap-2 rounded-xl border p-4">
-          <p className="text-sm font-medium">
-            Excluidos de la reposición{" "}
-            <span className="text-muted-foreground">({excluidos.length})</span>
-          </p>
-          {excluidos.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Ninguno excluido.</p>
-          ) : (
-            <ul className="flex flex-col divide-y">
-              {excluidos.map((p) => (
-                <li key={p.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                  <span className="min-w-0 truncate">
-                    {p.descripcion ?? p.codigo}
-                    <span className="text-muted-foreground"> · {p.rubro ?? "—"}</span>
-                  </span>
-                  <Button size="sm" variant="outline" onClick={() => reincluir(p)} disabled={pending}>
-                    <RotateCcw className="h-4 w-4" /> Reincluir
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
         </section>
       ) : null}
 
@@ -276,7 +187,6 @@ export function ReposicionCliente() {
                   <th className="px-4 py-2 font-medium">Rubro</th>
                   <th className="px-4 py-2 text-right font-medium">Quedan</th>
                   <th className="px-4 py-2 text-right font-medium">Mínimo</th>
-                  <th className="px-4 py-2"></th>
                 </tr>
               </thead>
               <tbody>
@@ -289,17 +199,6 @@ export function ReposicionCliente() {
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
                       {p.stock_minimo}
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => excluir(p)}
-                        disabled={pending}
-                        title="Sacar de la reposición (temporada) sin desactivar la venta"
-                      >
-                        <EyeOff className="h-4 w-4" /> Excluir
-                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -351,34 +250,222 @@ export function ReposicionCliente() {
   );
 }
 
-function FilaRubro({
+// Un rubro del acordeón: al abrirlo carga sus productos.
+function RubroAcordeon({
   rubro,
-  onAplicar,
-  pending,
+  supabase,
+  onCambio,
 }: {
   rubro: RubroConfig;
-  onAplicar: (rubro: string, valor: string) => void;
-  pending: boolean;
+  supabase: ReturnType<typeof createClient>;
+  onCambio: () => void;
 }) {
-  const [val, setVal] = useState(
-    rubro.minimo_actual != null ? String(rubro.minimo_actual) : "",
-  );
+  const [abierto, setAbierto] = useState(false);
+  const [prods, setProds] = useState<ProductoRubro[] | null>(null);
+  const [cargando, setCargando] = useState(false);
+  const [bulk, setBulk] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  async function toggle() {
+    const nuevoVal = !abierto;
+    setAbierto(nuevoVal);
+    if (nuevoVal && prods === null) {
+      setCargando(true);
+      let query = supabase
+        .from("productos")
+        .select("id,codigo,descripcion,stock,stock_minimo,excluir_reposicion")
+        .eq("activo", true)
+        .eq("es_pesable", false)
+        .order("descripcion");
+      query =
+        rubro.rubro === "SIN RUBRO"
+          ? query.or("rubro.is.null,rubro.eq.SIN RUBRO")
+          : query.eq("rubro", rubro.rubro);
+      const { data } = await query.limit(1000);
+      setProds((data as ProductoRubro[] | null) ?? []);
+      setCargando(false);
+    }
+  }
+
+  function aplicarBulk() {
+    const n = bulk.trim() === "" ? 0 : parseInt(bulk, 10);
+    if (Number.isNaN(n) || n < 0) {
+      toast.error("Poné un número válido");
+      return;
+    }
+    startTransition(async () => {
+      const { error } = await supabase.rpc("set_minimo_rubro", {
+        p_rubro: rubro.rubro,
+        p_minimo: n,
+      });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      setProds(
+        (prev) =>
+          prev?.map((p) => ({ ...p, stock_minimo: n > 0 ? n : null })) ?? prev,
+      );
+      toast.success(n > 0 ? `${rubro.rubro}: mínimo ${n}` : `${rubro.rubro}: sin mínimo`);
+      onCambio();
+    });
+  }
+
   return (
-    <div className="flex items-center gap-2 rounded-lg border px-3 py-2">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{rubro.rubro}</p>
-        <p className="text-xs text-muted-foreground">{rubro.cant} productos</p>
-      </div>
-      <Input
-        value={val}
-        onChange={(e) => setVal(e.target.value)}
-        inputMode="numeric"
-        placeholder="0"
-        className="h-9 w-16 text-center text-sm"
-      />
-      <Button size="sm" onClick={() => onAplicar(rubro.rubro, val)} disabled={pending}>
-        Aplicar
-      </Button>
+    <div className="py-1">
+      <button
+        type="button"
+        onClick={toggle}
+        className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-accent"
+      >
+        {abierto ? (
+          <ChevronDown className="h-4 w-4 shrink-0" />
+        ) : (
+          <ChevronRight className="h-4 w-4 shrink-0" />
+        )}
+        <span className="flex-1 font-medium">{rubro.rubro}</span>
+        <span className="text-xs text-muted-foreground">{rubro.cant} prod.</span>
+      </button>
+
+      {abierto ? (
+        <div className="flex flex-col gap-2 px-2 pb-3 pt-1">
+          <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2">
+            <span className="text-xs text-muted-foreground">
+              Mínimo para todo el rubro:
+            </span>
+            <Input
+              value={bulk}
+              onChange={(e) => setBulk(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  aplicarBulk();
+                }
+              }}
+              inputMode="numeric"
+              placeholder="0"
+              className="h-8 w-16 text-center text-sm"
+            />
+            <Button size="sm" onClick={aplicarBulk} disabled={pending}>
+              Aplicar a todos
+            </Button>
+          </div>
+
+          {cargando ? (
+            <p className="text-sm text-muted-foreground">Cargando…</p>
+          ) : (prods?.length ?? 0) === 0 ? (
+            <p className="text-sm text-muted-foreground">Sin productos.</p>
+          ) : (
+            <ul className="flex flex-col divide-y">
+              {prods!.map((p) => (
+                <FilaProductoRubro
+                  key={p.id}
+                  producto={p}
+                  supabase={supabase}
+                  onCambio={onCambio}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : null}
     </div>
+  );
+}
+
+function FilaProductoRubro({
+  producto,
+  supabase,
+  onCambio,
+}: {
+  producto: ProductoRubro;
+  supabase: ReturnType<typeof createClient>;
+  onCambio: () => void;
+}) {
+  const [min, setMin] = useState(
+    producto.stock_minimo != null ? String(producto.stock_minimo) : "",
+  );
+  const [excluido, setExcluido] = useState(producto.excluir_reposicion);
+  const [pending, startTransition] = useTransition();
+
+  function guardarMin() {
+    const n = min.trim() === "" ? 0 : parseInt(min, 10);
+    if (Number.isNaN(n) || n < 0) {
+      toast.error("Mínimo inválido");
+      return;
+    }
+    startTransition(async () => {
+      const { error } = await supabase
+        .from("productos")
+        .update({ stock_minimo: n > 0 ? n : null })
+        .eq("id", producto.id);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      onCambio();
+    });
+  }
+
+  function toggleExcluir() {
+    const nuevoVal = !excluido;
+    setExcluido(nuevoVal);
+    startTransition(async () => {
+      const { error } = await supabase.rpc("set_excluir_reposicion", {
+        p_id: producto.id,
+        p_excluir: nuevoVal,
+      });
+      if (error) {
+        setExcluido(!nuevoVal);
+        toast.error(error.message);
+        return;
+      }
+      onCambio();
+    });
+  }
+
+  return (
+    <li className={`flex items-center gap-2 py-2 ${excluido ? "opacity-60" : ""}`}>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm">{producto.descripcion ?? producto.codigo}</p>
+        <p className="text-xs text-muted-foreground tabular-nums">
+          quedan {cantidadStr(Number(producto.stock))}
+        </p>
+      </div>
+      <label className="flex items-center gap-1 text-xs text-muted-foreground">
+        mín
+        <Input
+          value={min}
+          onChange={(e) => setMin(e.target.value)}
+          onBlur={guardarMin}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              guardarMin();
+            }
+          }}
+          inputMode="numeric"
+          placeholder="—"
+          className="h-8 w-14 text-center text-sm"
+        />
+      </label>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={toggleExcluir}
+        disabled={pending}
+        title={excluido ? "Volver a incluir en reposición" : "Sacar de reposición (temporada)"}
+      >
+        {excluido ? (
+          <>
+            <Eye className="h-4 w-4" /> Incluir
+          </>
+        ) : (
+          <>
+            <EyeOff className="h-4 w-4" /> Excluir
+          </>
+        )}
+      </Button>
+    </li>
   );
 }

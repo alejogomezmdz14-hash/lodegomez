@@ -11,7 +11,7 @@ import { pesos, redondear2, parseNumeroAR } from "@/lib/formato";
 import { imprimirTicket } from "@/lib/imprimir";
 import { NuevoProductoDialog } from "@/components/nuevo-producto-dialog";
 import {
-  MEDIOS_PAGO,
+  MEDIOS_COBRO,
   type CartItem,
   type MedioPago,
   type Pago,
@@ -64,7 +64,7 @@ export function CajaCliente() {
     if (!dividido) return medio ? [{ medio, monto: total }] : null;
     const lista: Pago[] = [];
     let suma = 0;
-    for (const m of MEDIOS_PAGO) {
+    for (const m of MEDIOS_COBRO) {
       const v = parseNumeroAR(montos[m.valor]);
       if (v && v > 0) {
         lista.push({ medio: m.valor, monto: redondear2(v) });
@@ -180,10 +180,58 @@ export function CajaCliente() {
   function onSubmitCodigo(e: FormEvent) {
     e.preventDefault();
     const val = codigo;
+    // Enter con el input de código vacío = cobrar (flujo 100% teclado).
+    if (val.trim() === "") {
+      cobrar();
+      return;
+    }
     setCodigo("");
     resolverCodigo(val);
     foco();
   }
+
+  // Flechas del teclado: eligen el medio de pago (incluido "Dividir pago").
+  // No interfieren con el scanner (que solo mira teclas simples y Enter) ni con
+  // tipear montos/buscador (ahí las flechas mueven el cursor normalmente).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (pesable || altaCodigo || postVenta) return;
+      const el = document.activeElement as HTMLElement | null;
+      const enOtroInput =
+        !!el &&
+        (el.tagName === "INPUT" || el.tagName === "TEXTAREA") &&
+        el !== codigoRef.current;
+      if (enOtroInput) return;
+      if (!["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"].includes(e.key)) return;
+      e.preventDefault();
+      const dir = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
+      const opciones: (MedioPago | "dividir")[] = [
+        ...MEDIOS_COBRO.map((m) => m.valor),
+        "dividir",
+      ];
+      const actual = dividido
+        ? opciones.length - 1
+        : medio
+          ? opciones.indexOf(medio)
+          : -1;
+      const next =
+        actual < 0
+          ? dir > 0
+            ? 0
+            : opciones.length - 1
+          : (actual + dir + opciones.length) % opciones.length;
+      const opt = opciones[next];
+      if (opt === "dividir") {
+        setDividido(true);
+        setMedio(null);
+      } else {
+        setMedio(opt);
+        setDividido(false);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [medio, dividido, pesable, altaCodigo, postVenta]);
 
   function inc(i: number) {
     setItems((prev) => {
@@ -312,22 +360,22 @@ export function CajaCliente() {
                 {pesos(total)}
               </span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Pago</span>
-              <button
-                type="button"
-                onClick={() => setDividido((d) => !d)}
-                className="text-xs font-medium text-primary underline-offset-2 hover:underline"
-              >
-                {dividido ? "Pago simple" : "Dividir pago"}
-              </button>
-            </div>
+            <SelectorMedio
+              medio={medio}
+              dividido={dividido}
+              onMedio={(m) => {
+                setMedio(m);
+                setDividido(false);
+              }}
+              onDividir={() => {
+                setDividido(true);
+                setMedio(null);
+              }}
+            />
 
-            {!dividido ? (
-              <SelectorMedio value={medio} onChange={setMedio} />
-            ) : (
+            {dividido ? (
               <div className="flex flex-col gap-2">
-                {MEDIOS_PAGO.map((m) => (
+                {MEDIOS_COBRO.map((m) => (
                   <div key={m.valor} className="flex items-center gap-2">
                     <span className="w-32 text-sm">{m.label}</span>
                     <Input
@@ -335,6 +383,12 @@ export function CajaCliente() {
                       onChange={(e) =>
                         setMontos((prev) => ({ ...prev, [m.valor]: e.target.value }))
                       }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          cobrar();
+                        }
+                      }}
                       inputMode="decimal"
                       placeholder="0"
                       className="h-10"
@@ -343,7 +397,7 @@ export function CajaCliente() {
                 ))}
                 <Remanente total={total} montos={montos} />
               </div>
-            )}
+            ) : null}
 
             <Button
               onClick={cobrar}
@@ -352,6 +406,9 @@ export function CajaCliente() {
             >
               {cobrando ? "Cobrando…" : "Cobrar"}
             </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              Flechas ← → para elegir el pago · Enter para cobrar
+            </p>
           </div>
         </section>
       </div>
@@ -421,7 +478,7 @@ function Remanente({
   total: number;
   montos: Record<MedioPago, string>;
 }) {
-  const suma = MEDIOS_PAGO.reduce(
+  const suma = MEDIOS_COBRO.reduce(
     (s, m) => s + (parseNumeroAR(montos[m.valor]) ?? 0),
     0,
   );
