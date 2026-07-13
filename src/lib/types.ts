@@ -86,8 +86,25 @@ export type ResumenCaja = {
   total_qr: number;
   total_tarjeta: number;
   total_transferencia: number;
+  egresos_efectivo?: number;
+  egresos_transferencia?: number;
+  efectivo_esperado?: number;
   efectivo_contado?: number | null;
   diferencia?: number | null;
+};
+
+// Egresos de caja (retiros + pagos a proveedores).
+export type TipoEgreso = "retiro" | "pago_proveedor";
+
+export type Egreso = {
+  id: string;
+  tipo: TipoEgreso;
+  medio_pago: MedioPago;
+  monto: number;
+  detalle: string | null;
+  cierre_id: string | null;
+  creada_en: string;
+  empleado_nombre?: string | null;
 };
 
 // Fila de la lista de ventas (pantalla de ventas/anulación).
@@ -147,11 +164,18 @@ export type EventoDueno = {
 
 // Reposición.
 export type ProductoReponer = {
+  id: string;
   codigo: string;
   descripcion: string | null;
   rubro: string | null;
   stock: number;
   stock_minimo: number;
+};
+
+export type RubroConfig = {
+  rubro: string;
+  cant: number;
+  minimo_actual: number | null;
 };
 
 export type FaltanteManual = {
@@ -172,6 +196,7 @@ export type CierreHistorial = {
   total_qr: number;
   total_tarjeta: number;
   total_transferencia: number;
+  egresos_efectivo?: number;
   efectivo_contado: number | null;
   diferencia: number | null;
   empleado_nombre: string | null;
@@ -182,6 +207,14 @@ export type VentaPorEmpleado = {
   empleado: string;
   tickets: number;
   total: number;
+};
+
+// Egresos de un período (dashboard).
+export type EgresosPeriodo = {
+  retiros: number;
+  prov_efectivo: number;
+  prov_transferencia: number;
+  cantidad: number;
 };
 
 // ===== Fiscal (factura electrónica) =====

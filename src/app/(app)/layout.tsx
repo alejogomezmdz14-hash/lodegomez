@@ -26,6 +26,7 @@ export default async function AppLayout({
           <NavLink href="/caja">Cobrar</NavLink>
           <NavLink href="/caja/ventas">Ventas</NavLink>
           <NavLink href="/caja/cierre">Cierre</NavLink>
+          <NavLink href="/egresos">Egresos</NavLink>
           <NavLink href="/productos">Productos</NavLink>
           <NavLink href="/reposicion">Reposición</NavLink>
           {esAdmin ? <NavLink href="/admin/panel">Panel</NavLink> : null}

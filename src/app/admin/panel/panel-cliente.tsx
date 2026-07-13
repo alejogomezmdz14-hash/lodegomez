@@ -6,12 +6,14 @@ import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { pesos, cantidadStr } from "@/lib/formato";
+import { Input } from "@/components/ui/input";
 import type {
   MetricasPeriodo,
   RankingItem,
   EventoDueno,
   TipoEvento,
   VentaPorEmpleado,
+  EgresosPeriodo,
 } from "@/lib/types";
 
 type Preset = "hoy" | "ayer" | "semana" | "mes";
@@ -51,22 +53,31 @@ function rango(p: Preset): { desde: string; hasta: string } {
   return { desde: inicioHoy.toISOString(), hasta: ahora.toISOString() };
 }
 
+// Rango de un día puntual elegido en el calendario (hora local del navegador).
+function rangoDiaLocal(dia: string): { desde: string; hasta: string } {
+  const d = new Date(`${dia}T00:00:00`);
+  const hasta = new Date(d.getTime() + 24 * 60 * 60 * 1000);
+  return { desde: d.toISOString(), hasta: hasta.toISOString() };
+}
+
 export function PanelCliente() {
   const [supabase] = useState(() => createClient());
   const [preset, setPreset] = useState<Preset>("hoy");
+  const [dia, setDia] = useState(""); // día puntual del calendario (vacío = usar preset)
   const [metricas, setMetricas] = useState<MetricasPeriodo | null>(null);
   const [ranking, setRanking] = useState<RankingItem[]>([]);
   const [eventos, setEventos] = useState<EventoDueno[]>([]);
   const [porEmpleado, setPorEmpleado] = useState<VentaPorEmpleado[]>([]);
+  const [egresos, setEgresos] = useState<EgresosPeriodo | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     let cancelado = false;
-    const { desde, hasta } = rango(preset);
+    const { desde, hasta } = dia ? rangoDiaLocal(dia) : rango(preset);
     (async () => {
       setCargando(true);
-      const [m, r, e, emp] = await Promise.all([
+      const [m, r, e, emp, egr] = await Promise.all([
         supabase.rpc("metricas_periodo", { p_desde: desde, p_hasta: hasta }),
         supabase.rpc("ranking_productos", {
           p_desde: desde,
@@ -79,9 +90,10 @@ export function PanelCliente() {
           .order("creado_en", { ascending: false })
           .limit(30),
         supabase.rpc("ventas_por_empleado", { p_desde: desde, p_hasta: hasta }),
+        supabase.rpc("egresos_periodo", { p_desde: desde, p_hasta: hasta }),
       ]);
       if (cancelado) return;
-      if (m.error || r.error || e.error || emp.error) {
+      if (m.error || r.error || e.error || emp.error || egr.error) {
         setError(true);
       } else {
         setError(false);
@@ -89,13 +101,14 @@ export function PanelCliente() {
         setRanking((r.data as RankingItem[] | null) ?? []);
         setEventos((e.data as EventoDueno[] | null) ?? []);
         setPorEmpleado((emp.data as VentaPorEmpleado[] | null) ?? []);
+        setEgresos((egr.data as EgresosPeriodo | null) ?? null);
       }
       setCargando(false);
     })();
     return () => {
       cancelado = true;
     };
-  }, [preset, supabase]);
+  }, [preset, dia, supabase]);
 
   async function marcarLeido(id: string) {
     setEventos((prev) =>
@@ -116,17 +129,32 @@ export function PanelCliente() {
   return (
     <div className="flex flex-col gap-6">
       {/* Rango */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {PRESETS.map((p) => (
           <Button
             key={p.id}
-            variant={preset === p.id ? "default" : "outline"}
+            variant={!dia && preset === p.id ? "default" : "outline"}
             size="sm"
-            onClick={() => setPreset(p.id)}
+            onClick={() => {
+              setDia("");
+              setPreset(p.id);
+            }}
           >
             {p.label}
           </Button>
         ))}
+        <span className="mx-1 text-muted-foreground">·</span>
+        <Input
+          type="date"
+          value={dia}
+          onChange={(e) => setDia(e.target.value)}
+          className="h-8 w-auto text-sm"
+        />
+        {dia ? (
+          <Button variant="ghost" size="sm" onClick={() => setDia("")}>
+            Ver período
+          </Button>
+        ) : null}
       </div>
 
       {error ? (
@@ -159,6 +187,24 @@ export function PanelCliente() {
           <MedioFila label="QR" v={metricas?.qr} />
           <MedioFila label="Tarjeta" v={metricas?.tarjeta} />
           <MedioFila label="Transferencia" v={metricas?.transferencia} />
+        </div>
+      </Card>
+
+      {/* Egresos */}
+      <Card className="flex flex-col gap-2 p-4">
+        <p className="text-sm font-medium">Egresos (retiros + pagos a proveedores)</p>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4">
+          <MedioFila label="Retiros de caja" v={egresos?.retiros} />
+          <MedioFila label="Proveedores (efec.)" v={egresos?.prov_efectivo} />
+          <MedioFila label="Proveedores (transf.)" v={egresos?.prov_transferencia} />
+          <MedioFila
+            label="Total egresos"
+            v={
+              Number(egresos?.retiros ?? 0) +
+              Number(egresos?.prov_efectivo ?? 0) +
+              Number(egresos?.prov_transferencia ?? 0)
+            }
+          />
         </div>
       </Card>
 

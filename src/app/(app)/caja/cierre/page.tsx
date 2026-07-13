@@ -1,13 +1,23 @@
 import { createClient } from "@/lib/supabase/server";
 import { resumenCajaActual } from "@/lib/actions/caja";
+import { rangoDia } from "@/lib/fecha";
+import { FiltroDia } from "@/components/filtro-dia";
 import { CierreCliente } from "./cierre-cliente";
 import { pesos } from "@/lib/formato";
 import type { CierreHistorial } from "@/lib/types";
 
-export default async function CierrePage() {
+export default async function CierrePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ dia?: string }>;
+}) {
+  const { dia } = await searchParams;
   const resumen = await resumenCajaActual();
   const supabase = await createClient();
-  const { data } = await supabase.rpc("listar_cierres", { p_limite: 20 });
+  const { data } = await supabase.rpc("listar_cierres", {
+    p_limite: dia ? 500 : 20,
+    ...rangoDia(dia),
+  });
   const cierres = (data as CierreHistorial[] | null) ?? [];
 
   return (
@@ -23,7 +33,10 @@ export default async function CierrePage() {
       </section>
 
       <section className="flex flex-col gap-2">
-        <p className="text-sm font-medium">Cierres anteriores</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-medium">Cierres anteriores</p>
+          <FiltroDia />
+        </div>
         {cierres.length === 0 ? (
           <p className="text-sm text-muted-foreground">Todavía no hay cierres.</p>
         ) : (
@@ -36,6 +49,7 @@ export default async function CierrePage() {
                   <th className="px-4 py-2 text-right font-medium">Ventas</th>
                   <th className="px-4 py-2 text-right font-medium">Total</th>
                   <th className="px-4 py-2 text-right font-medium">Efectivo</th>
+                  <th className="px-4 py-2 text-right font-medium">Egresos</th>
                   <th className="px-4 py-2 text-right font-medium">Diferencia</th>
                 </tr>
               </thead>
@@ -56,6 +70,9 @@ export default async function CierrePage() {
                       <td className="px-4 py-2 text-right tabular-nums">{c.cant_ventas}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{pesos(Number(c.total))}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{pesos(Number(c.total_efectivo))}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+                        {Number(c.egresos_efectivo ?? 0) > 0 ? `− ${pesos(Number(c.egresos_efectivo))}` : "—"}
+                      </td>
                       <td
                         className={`px-4 py-2 text-right tabular-nums ${
                           dif === null ? "text-muted-foreground" : dif !== 0 ? "text-destructive" : ""

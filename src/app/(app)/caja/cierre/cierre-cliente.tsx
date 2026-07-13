@@ -22,9 +22,11 @@ export function CierreCliente({ resumen }: { resumen: ResumenCaja | null }) {
     );
   }
 
-  const efectivoSistema = Number(resumen.total_efectivo);
+  const egresosEfec = Number(resumen.egresos_efectivo ?? 0);
+  const efectivoEsperado =
+    resumen.efectivo_esperado ?? Number(resumen.total_efectivo) - egresosEfec;
   const contadoNum = parseNumeroAR(contado);
-  const dif = contadoNum !== null ? contadoNum - efectivoSistema : null;
+  const dif = contadoNum !== null ? contadoNum - efectivoEsperado : null;
 
   function cerrar() {
     const val = contado.trim() === "" ? null : parseNumeroAR(contado);
@@ -74,6 +76,16 @@ export function CierreCliente({ resumen }: { resumen: ResumenCaja | null }) {
           <span>Total</span>
           <span className="tabular-nums">{pesos(Number(resumen.total))}</span>
         </div>
+        {egresosEfec > 0 ? (
+          <div className="mt-2 flex justify-between border-t pt-2 text-sm text-destructive">
+            <span>Egresos en efectivo (retiros + pagos)</span>
+            <span className="tabular-nums">− {pesos(egresosEfec)}</span>
+          </div>
+        ) : null}
+        <div className="mt-2 flex justify-between border-t pt-2 text-base font-semibold">
+          <span>Efectivo esperado en caja</span>
+          <span className="tabular-nums">{pesos(efectivoEsperado)}</span>
+        </div>
       </div>
 
       <label className="flex flex-col gap-1.5">
@@ -98,7 +110,7 @@ export function CierreCliente({ resumen }: { resumen: ResumenCaja | null }) {
                 : "text-destructive"
           }`}
         >
-          Diferencia vs efectivo del sistema: <strong>{pesos(dif)}</strong>
+          Diferencia vs efectivo esperado: <strong>{pesos(dif)}</strong>
         </p>
       ) : null}
 
