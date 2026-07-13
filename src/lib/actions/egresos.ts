@@ -15,6 +15,7 @@ export async function registrarEgreso(input: {
   medio_pago: MedioPago;
   monto: number;
   detalle?: string;
+  cajaId?: string;
 }): Promise<ResultadoEgreso> {
   const u = await getUsuarioActual();
   if (!u) return { ok: false, error: "No autorizado" };
@@ -33,7 +34,7 @@ export async function registrarEgreso(input: {
     medio_pago: medio,
     monto: input.monto,
     detalle: input.detalle?.trim() || null,
-    caja_id: "principal",
+    caja_id: input.cajaId?.trim() || "principal",
   });
   if (error) return { ok: false, error: error.message };
   return { ok: true };

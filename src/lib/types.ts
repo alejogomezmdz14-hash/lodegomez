@@ -194,6 +194,7 @@ export type CierreHistorial = {
   id: string;
   creado_en: string;
   hasta: string;
+  caja_id?: string;
   cant_ventas: number;
   total: number;
   total_efectivo: number;

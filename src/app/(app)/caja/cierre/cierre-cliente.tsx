@@ -1,19 +1,42 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { cerrarCaja } from "@/lib/actions/caja";
+import { cerrarCaja, resumenCajaActual } from "@/lib/actions/caja";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { pesos, parseNumeroAR } from "@/lib/formato";
+import { useTurno, turnoLabel } from "@/lib/turno";
+import { SelectorTurno } from "@/components/selector-turno";
 import type { ResumenCaja } from "@/lib/types";
 
-export function CierreCliente({ resumen }: { resumen: ResumenCaja | null }) {
+export function CierreCliente() {
   const router = useRouter();
+  const { turno, elegir, limpiar, listo } = useTurno();
+  const [resumen, setResumen] = useState<ResumenCaja | null | undefined>(
+    undefined,
+  );
   const [contado, setContado] = useState("");
   const [pending, startTransition] = useTransition();
 
+  useEffect(() => {
+    if (!turno) return;
+    let cancelado = false;
+    resumenCajaActual(turno).then((r) => {
+      if (!cancelado) setResumen(r);
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [turno]);
+
+  if (listo && !turno) {
+    return <SelectorTurno onElegir={elegir} />;
+  }
+  if (resumen === undefined) {
+    return <p className="text-sm text-muted-foreground">Cargando…</p>;
+  }
   if (!resumen) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -35,7 +58,7 @@ export function CierreCliente({ resumen }: { resumen: ResumenCaja | null }) {
       return;
     }
     startTransition(async () => {
-      const res = await cerrarCaja(val);
+      const res = await cerrarCaja(val, turno ?? "principal");
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -47,6 +70,7 @@ export function CierreCliente({ resumen }: { resumen: ResumenCaja | null }) {
           : `Caja cerrada — diferencia ${pesos(Number(d))}`,
       );
       setContado("");
+      limpiar(); // corta el turno → la próxima venta arranca una caja nueva
       router.refresh();
     });
   }
@@ -60,6 +84,19 @@ export function CierreCliente({ resumen }: { resumen: ResumenCaja | null }) {
 
   return (
     <div className="flex max-w-lg flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="rounded-lg bg-accent px-3 py-1.5 font-medium">
+          {turnoLabel(turno)}
+        </span>
+        <button
+          type="button"
+          onClick={limpiar}
+          className="text-xs font-medium text-primary hover:underline"
+        >
+          Cambiar turno
+        </button>
+      </div>
+
       <div className="rounded-xl border p-4">
         <p className="mb-2 text-sm text-muted-foreground">
           {resumen.cant_ventas} venta(s) sin cerrar
@@ -115,7 +152,7 @@ export function CierreCliente({ resumen }: { resumen: ResumenCaja | null }) {
       ) : null}
 
       <Button onClick={cerrar} disabled={pending} size="lg" className="max-w-xs">
-        {pending ? "Cerrando…" : "Cerrar caja"}
+        {pending ? "Cerrando…" : `Cerrar caja — ${turnoLabel(turno)}`}
       </Button>
     </div>
   );

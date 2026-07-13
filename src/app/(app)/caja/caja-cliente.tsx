@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { pesos, redondear2, parseNumeroAR } from "@/lib/formato";
 import { imprimirTicket } from "@/lib/imprimir";
 import { NuevoProductoDialog } from "@/components/nuevo-producto-dialog";
+import { SelectorTurno } from "@/components/selector-turno";
+import { useTurno, turnoLabel } from "@/lib/turno";
 import {
   MEDIOS_COBRO,
   type CartItem,
@@ -30,6 +32,7 @@ import type { ComprobanteImpresion } from "@/lib/actions/comprobantes";
 
 export function CajaCliente() {
   const [supabase] = useState(() => createClient());
+  const { turno, elegir, limpiar, listo } = useTurno();
   const codigoRef = useRef<HTMLInputElement>(null);
 
   const [codigo, setCodigo] = useState("");
@@ -286,6 +289,7 @@ export function CajaCliente() {
     const res = await registrarVenta(
       pagos,
       items.map((it) => ({ producto_id: it.producto_id, cantidad: it.cantidad })),
+      turno ?? "principal",
     );
     setCobrando(false);
     if (!res.ok) {
@@ -307,6 +311,16 @@ export function CajaCliente() {
       <div className="flex h-full min-h-0 flex-col print:hidden lg:flex-row">
         {/* Captura: código + buscador */}
         <section className="flex shrink-0 flex-col gap-3 border-b p-4 lg:w-96 lg:shrink-0 lg:border-b-0 lg:border-r">
+          <div className="flex items-center justify-between rounded-lg bg-accent px-3 py-1.5 text-sm">
+            <span className="font-medium">{turnoLabel(turno)}</span>
+            <button
+              type="button"
+              onClick={limpiar}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Cambiar turno
+            </button>
+          </div>
           <form onSubmit={onSubmitCodigo}>
             <Input
               ref={codigoRef}
@@ -466,6 +480,8 @@ export function CajaCliente() {
       />
 
       <Ticket venta={ticket} />
+
+      {listo && !turno ? <SelectorTurno onElegir={elegir} /> : null}
     </>
   );
 }

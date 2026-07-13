@@ -10,9 +10,12 @@ import { Button } from "@/components/ui/button";
 import { pesos, parseNumeroAR } from "@/lib/formato";
 import type { Egreso, MedioPago, TipoEgreso } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useTurno, turnoLabel } from "@/lib/turno";
+import { SelectorTurno } from "@/components/selector-turno";
 
 export function EgresosCliente({ inicial }: { inicial: Egreso[] }) {
   const router = useRouter();
+  const { turno, elegir, listo } = useTurno();
   const [egresos, setEgresos] = useState<Egreso[]>(inicial);
   const [tipo, setTipo] = useState<TipoEgreso>("retiro");
   const [medio, setMedio] = useState<MedioPago>("efectivo");
@@ -32,6 +35,7 @@ export function EgresosCliente({ inicial }: { inicial: Egreso[] }) {
         medio_pago: tipo === "retiro" ? "efectivo" : medio,
         monto: m,
         detalle: detalle.trim() || undefined,
+        cajaId: turno ?? "principal",
       });
       if (!res.ok) {
         toast.error(res.error);
@@ -59,8 +63,18 @@ export function EgresosCliente({ inicial }: { inicial: Egreso[] }) {
   }
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-      {/* Formulario */}
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="rounded-lg bg-accent px-3 py-1.5 font-medium">
+          {turnoLabel(turno)}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          Los egresos entran a la caja de este turno.
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        {/* Formulario */}
       <div className="flex w-full max-w-md flex-col gap-3 rounded-xl border p-4">
         <div className="grid grid-cols-2 gap-2">
           <TipoBtn activo={tipo === "retiro"} onClick={() => setTipo("retiro")}>
@@ -168,7 +182,10 @@ export function EgresosCliente({ inicial }: { inicial: Egreso[] }) {
             ))}
           </ul>
         )}
+        </div>
       </div>
+
+      {listo && !turno ? <SelectorTurno onElegir={elegir} /> : null}
     </div>
   );
 }

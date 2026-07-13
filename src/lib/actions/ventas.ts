@@ -12,6 +12,7 @@ export type ResultadoVenta =
 export async function registrarVenta(
   pagos: Pago[],
   items: ItemVenta[],
+  cajaId = "principal",
 ): Promise<ResultadoVenta> {
   if (!items || items.length === 0) {
     return { ok: false, error: "El carrito está vacío." };
@@ -24,6 +25,7 @@ export async function registrarVenta(
   const { data, error } = await supabase.rpc("registrar_venta", {
     p_pagos: pagos,
     p_items: items,
+    p_caja_id: cajaId,
   });
 
   if (error) {

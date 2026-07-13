@@ -179,9 +179,16 @@ function FilaProducto({
   const iP = String(producto.precio_venta ?? "");
   const iC = String(producto.precio_costo ?? "");
   const iS = String(producto.stock ?? "");
+  const calcMargen = (c: string, p: string) => {
+    const cn = parseNumeroAR(c);
+    const pn = parseNumeroAR(p);
+    if (cn && cn > 0 && pn !== null) return String(Math.round(((pn - cn) / cn) * 100));
+    return "";
+  };
   const [precio, setPrecio] = useState(iP);
   const [costo, setCosto] = useState(iC);
   const [stock, setStock] = useState(iS);
+  const [margen, setMargen] = useState(() => calcMargen(iC, iP));
   const [gP, setGP] = useState(iP);
   const [gC, setGC] = useState(iC);
   const [gS, setGS] = useState(iS);
@@ -191,6 +198,24 @@ function FilaProducto({
 
   const cambiado = precio !== gP || costo !== gC || stock !== gS;
   const activo = producto.activo;
+
+  // Costo, ganancia% y precio se recalculan entre sí.
+  function onCosto(v: string) {
+    setCosto(v);
+    setMargen(calcMargen(v, precio));
+  }
+  function onPrecio(v: string) {
+    setPrecio(v);
+    setMargen(calcMargen(costo, v));
+  }
+  function onMargen(v: string) {
+    setMargen(v);
+    const cn = parseNumeroAR(costo);
+    const mn = parseNumeroAR(v);
+    if (cn && cn > 0 && mn !== null) {
+      setPrecio(String(Math.round(cn * (1 + mn / 100) * 100) / 100));
+    }
+  }
 
   function guardar() {
     const cambios: { precio_venta?: number; precio_costo?: number; stock?: number } = {};
@@ -231,6 +256,7 @@ function FilaProducto({
       setPrecio(np);
       setCosto(nc);
       setStock(ns);
+      setMargen(calcMargen(nc, np));
       setGP(np);
       setGC(nc);
       setGS(ns);
@@ -300,16 +326,29 @@ function FilaProducto({
         Costo
         <Input
           value={costo}
-          onChange={(e) => setCosto(e.target.value)}
+          onChange={(e) => onCosto(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && guardar()}
           inputMode="decimal"
           className="h-9 w-24 text-sm"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+        Ganancia %
+        <Input
+          value={margen}
+          onChange={(e) => onMargen(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && guardar()}
+          inputMode="numeric"
+          placeholder="—"
+          className="h-9 w-20 text-sm"
         />
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         Precio
         <Input
           value={precio}
-          onChange={(e) => setPrecio(e.target.value)}
+          onChange={(e) => onPrecio(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && guardar()}
           inputMode="decimal"
           className="h-9 w-24 text-sm"
         />
@@ -319,6 +358,7 @@ function FilaProducto({
         <Input
           value={stock}
           onChange={(e) => setStock(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && guardar()}
           inputMode="decimal"
           className="h-9 w-20 text-sm"
         />
