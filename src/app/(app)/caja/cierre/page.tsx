@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getUsuarioActual } from "@/lib/auth";
 import { rangoDia } from "@/lib/fecha";
 import { FiltroDia } from "@/components/filtro-dia";
 import { CierreCliente } from "./cierre-cliente";
@@ -14,6 +15,7 @@ export default async function CierrePage({
   searchParams: Promise<{ dia?: string }>;
 }) {
   const { dia } = await searchParams;
+  const u = await getUsuarioActual();
   const supabase = await createClient();
   const { data } = await supabase.rpc("listar_cierres", {
     p_limite: dia ? 500 : 20,
@@ -30,7 +32,7 @@ export default async function CierrePage({
             Cuánto entró en el turno por cada medio de pago.
           </p>
         </div>
-        <CierreCliente />
+        <CierreCliente esAdmin={u?.rol === "admin"} />
       </section>
 
       <section className="flex flex-col gap-2">

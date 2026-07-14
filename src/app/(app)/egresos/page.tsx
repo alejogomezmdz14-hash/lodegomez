@@ -1,7 +1,9 @@
+import { getUsuarioActual } from "@/lib/auth";
 import { listarEgresos } from "@/lib/actions/egresos";
 import { EgresosCliente } from "./egresos-cliente";
 
 export default async function EgresosPage() {
+  const u = await getUsuarioActual();
   const egresos = await listarEgresos(50);
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -11,7 +13,7 @@ export default async function EgresosPage() {
           Retiros de caja y pagos a proveedores. El efectivo resta del cierre del turno.
         </p>
       </div>
-      <EgresosCliente inicial={egresos} />
+      <EgresosCliente inicial={egresos} esAdmin={u?.rol === "admin"} />
     </div>
   );
 }

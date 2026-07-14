@@ -10,12 +10,18 @@ import { Button } from "@/components/ui/button";
 import { pesos, parseNumeroAR } from "@/lib/formato";
 import type { Egreso, MedioPago, TipoEgreso } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { useTurno, turnoLabel } from "@/lib/turno";
+import { useTurno, turnoLabel, type Turno } from "@/lib/turno";
 import { SelectorTurno } from "@/components/selector-turno";
 
-export function EgresosCliente({ inicial }: { inicial: Egreso[] }) {
+export function EgresosCliente({
+  inicial,
+  esAdmin = false,
+}: {
+  inicial: Egreso[];
+  esAdmin?: boolean;
+}) {
   const router = useRouter();
-  const { turno, elegir, listo } = useTurno();
+  const { turno, elegir, limpiar, listo } = useTurno();
   const [egresos, setEgresos] = useState<Egreso[]>(inicial);
   const [tipo, setTipo] = useState<TipoEgreso>("retiro");
   const [medio, setMedio] = useState<MedioPago>("efectivo");
@@ -65,11 +71,30 @@ export function EgresosCliente({ inicial }: { inicial: Egreso[] }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="rounded-lg bg-accent px-3 py-1.5 font-medium">
-          {turnoLabel(turno)}
-        </span>
+        {esAdmin ? (
+          <span className="flex items-center gap-2 rounded-lg bg-accent px-3 py-1.5">
+            <span className="text-xs text-muted-foreground">Turno:</span>
+            <select
+              value={turno ?? ""}
+              onChange={(e) =>
+                e.target.value ? elegir(e.target.value as Turno) : limpiar()
+              }
+              className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+            >
+              <option value="">Sin turno</option>
+              <option value="manana">Turno mañana</option>
+              <option value="tarde">Turno tarde</option>
+            </select>
+          </span>
+        ) : (
+          <span className="rounded-lg bg-accent px-3 py-1.5 font-medium">
+            {turnoLabel(turno)}
+          </span>
+        )}
         <span className="text-xs text-muted-foreground">
-          Los egresos entran a la caja de este turno.
+          {esAdmin
+            ? "Elegí a qué turno cargar el egreso (o sin turno)."
+            : "Los egresos entran a la caja de este turno."}
         </span>
       </div>
 
@@ -185,7 +210,9 @@ export function EgresosCliente({ inicial }: { inicial: Egreso[] }) {
         </div>
       </div>
 
-      {listo && !turno ? <SelectorTurno onElegir={elegir} /> : null}
+      {listo && !turno && !esAdmin ? (
+        <SelectorTurno onElegir={elegir} />
+      ) : null}
     </div>
   );
 }
