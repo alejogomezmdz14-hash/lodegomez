@@ -221,24 +221,14 @@ function CierreCaja({
             </p>
           ) : null}
 
-          <div className="flex flex-wrap gap-2">
-            <Button
-              onClick={cerrar}
-              disabled={pending}
-              size="lg"
-              className="max-w-xs"
-            >
-              {pending ? "Cerrando…" : "Cerrar e imprimir"}
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => onImprimir(resumen, label)}
-              title="Imprimir el estado actual sin cerrar"
-            >
-              <Printer className="h-4 w-4" /> Imprimir
-            </Button>
-          </div>
+          <Button
+            onClick={cerrar}
+            disabled={pending}
+            size="lg"
+            className="max-w-xs"
+          >
+            {pending ? "Cerrando…" : "Cerrar e imprimir"}
+          </Button>
         </>
       )}
     </div>
