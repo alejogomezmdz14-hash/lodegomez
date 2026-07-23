@@ -24,7 +24,7 @@ export default async function CierrePage({
   const cierres = (data as CierreHistorial[] | null) ?? [];
 
   return (
-    <div className="flex flex-col gap-8 p-6">
+    <div className="flex flex-col gap-8 p-6 print:hidden">
       <section className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold tracking-tight">Cierre de caja</h1>

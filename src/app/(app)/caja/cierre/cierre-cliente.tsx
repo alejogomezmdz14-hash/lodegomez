@@ -1,49 +1,90 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Printer } from "lucide-react";
 import { cerrarCaja, resumenCajaActual } from "@/lib/actions/caja";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { pesos, parseNumeroAR } from "@/lib/formato";
+import { imprimirTicket } from "@/lib/imprimir";
 import { useTurno, turnoLabel, TURNOS } from "@/lib/turno";
 import { SelectorTurno } from "@/components/selector-turno";
+import { TicketCierre } from "./ticket-cierre";
 import type { ResumenCaja } from "@/lib/types";
 
 export function CierreCliente({ esAdmin = false }: { esAdmin?: boolean }) {
   const { turno, elegir, limpiar, listo } = useTurno();
+  const [imprimible, setImprimible] = useState<{
+    data: ResumenCaja;
+    label: string;
+  } | null>(null);
 
-  // Admin: ve y puede cerrar las dos cajas (mañana y tarde). Sin gate.
+  // Lo maneja el padre para que la impresión sobreviva aunque el CierreTurno
+  // se desmonte (empleado: al cerrar se corta el turno).
+  function imprimir(data: ResumenCaja, label: string) {
+    setImprimible({ data, label });
+    imprimirTicket();
+  }
+
+  let contenido: React.ReactNode;
   if (esAdmin) {
-    return (
+    contenido = (
       <div className="flex flex-col gap-4">
         <p className="text-sm text-muted-foreground">
           Ves las dos cajas. Podés cerrar cualquiera.
         </p>
         <div className="flex flex-col gap-6 lg:flex-row">
           {TURNOS.map((t) => (
-            <CierreTurno key={t.valor} caja={t.valor} label={t.label} />
+            <CierreTurno
+              key={t.valor}
+              caja={t.valor}
+              label={t.label}
+              onImprimir={imprimir}
+            />
           ))}
         </div>
       </div>
     );
+  } else if (listo && !turno) {
+    contenido = <SelectorTurno onElegir={elegir} />;
+  } else if (!turno) {
+    contenido = <p className="text-sm text-muted-foreground">Cargando…</p>;
+  } else {
+    contenido = (
+      <CierreTurno
+        caja={turno}
+        label={turnoLabel(turno)}
+        onClosed={limpiar}
+        onCambiar={limpiar}
+        onImprimir={imprimir}
+      />
+    );
   }
 
-  // Empleado: elige turno sí o sí y cierra el suyo.
-  if (listo && !turno) {
-    return <SelectorTurno onElegir={elegir} />;
-  }
-  if (!turno) {
-    return <p className="text-sm text-muted-foreground">Cargando…</p>;
-  }
   return (
-    <CierreTurno
-      caja={turno}
-      label={turnoLabel(turno)}
-      onClosed={limpiar}
-      onCambiar={limpiar}
-    />
+    <>
+      {imprimible ? (
+        <div className="mb-3 print:hidden">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => imprimir(imprimible.data, imprimible.label)}
+          >
+            <Printer className="h-4 w-4" /> Reimprimir último cierre
+          </Button>
+        </div>
+      ) : null}
+      {contenido}
+      {typeof document !== "undefined" && imprimible
+        ? createPortal(
+            <TicketCierre data={imprimible.data} label={imprimible.label} />,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
 
@@ -52,11 +93,13 @@ function CierreTurno({
   label,
   onClosed,
   onCambiar,
+  onImprimir,
 }: {
   caja: string;
   label: string;
   onClosed?: () => void;
   onCambiar?: () => void;
+  onImprimir: (data: ResumenCaja, label: string) => void;
 }) {
   const router = useRouter();
   const [resumen, setResumen] = useState<ResumenCaja | null | undefined>(
@@ -102,8 +145,9 @@ function CierreTurno({
           : `${label} cerrado — diferencia ${pesos(Number(d))}`,
       );
       setContado("");
-      onClosed?.();
+      onImprimir(res.resumen, label); // imprime el comprobante del cierre
       setRecarga((x) => x + 1);
+      onClosed?.(); // empleado: corta el turno (arranca caja nueva)
       router.refresh();
     });
   }
@@ -194,14 +238,24 @@ function CierreTurno({
             </p>
           ) : null}
 
-          <Button
-            onClick={cerrar}
-            disabled={pending}
-            size="lg"
-            className="max-w-xs"
-          >
-            {pending ? "Cerrando…" : `Cerrar caja — ${label}`}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={cerrar}
+              disabled={pending}
+              size="lg"
+              className="max-w-xs"
+            >
+              {pending ? "Cerrando…" : `Cerrar e imprimir — ${label}`}
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => onImprimir(resumen, label)}
+              title="Imprimir el estado actual sin cerrar"
+            >
+              <Printer className="h-4 w-4" /> Imprimir
+            </Button>
+          </div>
         </>
       )}
     </div>

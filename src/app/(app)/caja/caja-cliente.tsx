@@ -34,6 +34,7 @@ export function CajaCliente({ esAdmin = false }: { esAdmin?: boolean }) {
   const [supabase] = useState(() => createClient());
   const { turno, elegir, limpiar, listo } = useTurno();
   const codigoRef = useRef<HTMLInputElement>(null);
+  const cobrandoRef = useRef(false); // guarda síncrona contra doble cobro
 
   const [codigo, setCodigo] = useState("");
   const [term, setTerm] = useState("");
@@ -277,33 +278,39 @@ export function CajaCliente({ esAdmin = false }: { esAdmin?: boolean }) {
   }
 
   async function cobrar() {
+    if (cobrandoRef.current) return; // ya hay un cobro en curso → no duplicar
     if (items.length === 0) return;
     if (!pagos) {
       toast.error(dividido ? "El pago no cubre el total" : "Elegí un medio de pago");
       return;
     }
+    cobrandoRef.current = true;
     // Limpiar impresiones de la venta anterior para que no co-impriman.
     setTicket(null);
     setFiscalPrint(null);
     setCobrando(true);
-    const res = await registrarVenta(
-      pagos,
-      items.map((it) => ({ producto_id: it.producto_id, cantidad: it.cantidad })),
-      turno ?? "principal",
-    );
-    setCobrando(false);
-    if (!res.ok) {
-      toast.error(res.error);
-      return;
+    try {
+      const res = await registrarVenta(
+        pagos,
+        items.map((it) => ({ producto_id: it.producto_id, cantidad: it.cantidad })),
+        turno ?? "principal",
+      );
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setPostVenta(res.venta);
+      if (res.venta.items.length !== items.length) {
+        toast.warning("Ojo: algunos ítems no se registraron. Revisá el ticket.");
+      }
+      toast.success(`Venta #${res.venta.ticket_nro} — ${pesos(res.venta.total)}`);
+      setItems([]);
+      resetPago();
+      foco();
+    } finally {
+      cobrandoRef.current = false;
+      setCobrando(false);
     }
-    setPostVenta(res.venta);
-    if (res.venta.items.length !== items.length) {
-      toast.warning("Ojo: algunos ítems no se registraron. Revisá el ticket.");
-    }
-    toast.success(`Venta #${res.venta.ticket_nro} — ${pesos(res.venta.total)}`);
-    setItems([]);
-    resetPago();
-    foco();
   }
 
   return (
@@ -363,10 +370,21 @@ export function CajaCliente({ esAdmin = false }: { esAdmin?: boolean }) {
 
         {/* Carrito + cobro */}
         <section className="flex min-h-0 flex-1 flex-col p-4">
-          <div className="mb-1 flex shrink-0 items-center justify-between">
+          <div className="mb-1 flex shrink-0 items-center justify-between gap-2">
             <span className="text-sm text-muted-foreground">
               {items.length} ítem{items.length === 1 ? "" : "s"}
             </span>
+            <div className="flex items-center gap-1">
+            {items.length > 0 ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={foco}
+                title="Volver a agregar productos sin perder la venta"
+              >
+                ← Seguir agregando
+              </Button>
+            ) : null}
             {items.length > 0 ? (
               <Button
                 variant="ghost"
@@ -380,6 +398,7 @@ export function CajaCliente({ esAdmin = false }: { esAdmin?: boolean }) {
                 Vaciar
               </Button>
             ) : null}
+            </div>
           </div>
 
           <Carrito items={items} onInc={inc} onDec={dec} onQuitar={quitar} />

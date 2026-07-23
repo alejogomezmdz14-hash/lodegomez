@@ -14,7 +14,7 @@ export default async function VentasPage({
   const rango = rangoDia(dia);
   const supabase = await createClient();
   const { data } = await supabase.rpc("listar_ventas", {
-    p_limite: dia ? 1000 : 50,
+    p_limite: dia ? 3000 : 1500,
     ...rango,
   });
   const ventas = (data as VentaListado[] | null) ?? [];
