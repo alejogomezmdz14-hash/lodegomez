@@ -260,28 +260,42 @@ export async function emitirComprobante(
   let fechaCbte = "";
   let ultimoError = "";
   for (let intento = 0; intento < 3; intento++) {
+    // 1) Último autorizado: es una CONSULTA (no genera CAE) → se puede reintentar
+    //    sin riesgo ante caídas de red (ECONNRESET, fetch failed, timeouts).
+    let last: number | null = null;
+    for (let g = 0; g < 3; g++) {
+      try {
+        last = Number(
+          await afip.ElectronicBilling.getLastVoucher(puntoVenta, cbteTipo),
+        );
+        break;
+      } catch (e) {
+        ultimoError = e instanceof Error ? e.message : String(e);
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    }
+    if (last === null) break; // no se pudo ni consultar (AFIP/red caída) → cortar
+
+    numero = last + 1;
+    const armado = armarVoucher({
+      tipo: datos.tipo,
+      puntoVenta,
+      numero,
+      receptor,
+      items: itemsFiscales,
+    });
+    fechaCbte = armado.fecha;
+
+    // 2) Emitir: UNA sola vez por número. Solo el conflicto de numeración (10016)
+    //    se reintenta (con un número nuevo); cualquier otro error corta para NO
+    //    re-emitir a ciegas y arriesgar un doble CAE.
     try {
-      const last = (await afip.ElectronicBilling.getLastVoucher(
-        puntoVenta,
-        cbteTipo,
-      )) as number;
-      numero = Number(last) + 1;
-      const armado = armarVoucher({
-        tipo: datos.tipo,
-        puntoVenta,
-        numero,
-        receptor,
-        items: itemsFiscales,
-      });
-      fechaCbte = armado.fecha;
       const res = await afip.ElectronicBilling.createVoucher(armado.voucher);
       cae = res.CAE;
       caeVto = res.CAEFchVto; // yyyy-mm-dd
       break;
     } catch (e) {
       ultimoError = e instanceof Error ? e.message : String(e);
-      // Solo el conflicto de numeración se reintenta. Cualquier otro error
-      // (incluida una respuesta perdida) corta: NO re-emitir a ciegas.
       if (!/10016|no se corresponde/i.test(ultimoError)) break;
     }
   }
