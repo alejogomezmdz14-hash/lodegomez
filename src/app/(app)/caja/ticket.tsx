@@ -29,7 +29,11 @@ export function Ticket({ venta }: { venta: VentaTicket | null }) {
         <div className="my-2 border-t border-dashed border-black" />
         <div className="flex justify-between">
           <span>Ticket #{venta.ticket_nro}</span>
-          <span>{fecha.toLocaleString("es-AR")}</span>
+          <span>
+            {fecha.toLocaleString("es-AR", {
+              timeZone: "America/Argentina/Buenos_Aires",
+            })}
+          </span>
         </div>
         <div className="my-2 border-t border-dashed border-black" />
 

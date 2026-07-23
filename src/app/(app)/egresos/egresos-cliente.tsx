@@ -149,6 +149,7 @@ export function EgresosCliente({ inicial }: { inicial: Egreso[] }) {
                       month: "2-digit",
                       hour: "2-digit",
                       minute: "2-digit",
+                      timeZone: "America/Argentina/Buenos_Aires",
                     })}
                     {e.cierre_id ? " · cerrado" : ""}
                   </p>

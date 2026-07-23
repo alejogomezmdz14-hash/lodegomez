@@ -64,6 +64,7 @@ export default async function CierrePage({
                           month: "2-digit",
                           hour: "2-digit",
                           minute: "2-digit",
+                          timeZone: "America/Argentina/Buenos_Aires",
                         })}
                       </td>
                       <td className="px-4 py-2">{c.empleado_nombre ?? "—"}</td>

@@ -226,6 +226,7 @@ export function VentasCliente({
                   month: "2-digit",
                   hour: "2-digit",
                   minute: "2-digit",
+                  timeZone: "America/Argentina/Buenos_Aires",
                 })}{" "}
                 · {pesos(Number(resultado.venta.total))} ·{" "}
                 {resultado.venta.es_mixto
@@ -300,6 +301,7 @@ export function VentasCliente({
                           {new Date(v.creada_en).toLocaleTimeString("es-AR", {
                             hour: "2-digit",
                             minute: "2-digit",
+                            timeZone: "America/Argentina/Buenos_Aires",
                           })}
                         </td>
                         <td className="px-4 py-3">{v.empleado_nombre ?? "—"}</td>

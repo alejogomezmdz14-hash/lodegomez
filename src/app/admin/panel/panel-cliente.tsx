@@ -305,6 +305,7 @@ export function PanelCliente() {
                     month: "2-digit",
                     hour: "2-digit",
                     minute: "2-digit",
+                    timeZone: "America/Argentina/Buenos_Aires",
                   })}
                 </span>
                 {!ev.leido ? (
