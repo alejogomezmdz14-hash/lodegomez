@@ -2,30 +2,31 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getUsuarioActual } from "@/lib/auth";
-import type { ResumenCaja } from "@/lib/types";
+import type { ResumenCaja, CajaAbierta } from "@/lib/types";
 
 export type ResultadoCierre =
   | { ok: true; resumen: ResumenCaja }
   | { ok: false; error: string };
 
-// Totales del turno abierto (solo lectura). cajaId = turno (manana/tarde).
+// Resumen de la caja abierta de un empleado (default: uno mismo; el admin puede
+// pasar el id de otro empleado).
 export async function resumenCajaActual(
-  cajaId = "principal",
+  empleadoId?: string,
 ): Promise<ResumenCaja | null> {
   const u = await getUsuarioActual();
   if (!u) return null;
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("resumen_caja_actual", {
-    p_caja_id: cajaId,
+    p_empleado_id: empleadoId ?? null,
   });
   if (error) return null;
   return data as ResumenCaja;
 }
 
-// Cierra el turno y devuelve el resumen (con diferencia si se contó el efectivo).
+// Cierra la caja de un empleado (default: la propia).
 export async function cerrarCaja(
   efectivoContado: number | null,
-  cajaId = "principal",
+  empleadoId?: string,
 ): Promise<ResultadoCierre> {
   const u = await getUsuarioActual();
   if (!u) return { ok: false, error: "No autorizado" };
@@ -37,9 +38,18 @@ export async function cerrarCaja(
   }
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("cerrar_caja", {
-    p_caja_id: cajaId,
+    p_empleado_id: empleadoId ?? null,
     p_efectivo_contado: efectivoContado,
   });
   if (error) return { ok: false, error: error.message };
   return { ok: true, resumen: data as ResumenCaja };
+}
+
+// Cajas abiertas por empleado (solo admin).
+export async function cajasAbiertas(): Promise<CajaAbierta[]> {
+  const u = await getUsuarioActual();
+  if (!u) return [];
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("cajas_abiertas");
+  return (data as CajaAbierta[] | null) ?? [];
 }

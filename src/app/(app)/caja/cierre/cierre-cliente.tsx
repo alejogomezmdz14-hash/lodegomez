@@ -5,25 +5,30 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Printer } from "lucide-react";
-import { cerrarCaja, resumenCajaActual } from "@/lib/actions/caja";
+import {
+  cerrarCaja,
+  resumenCajaActual,
+  cajasAbiertas,
+} from "@/lib/actions/caja";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { pesos, parseNumeroAR } from "@/lib/formato";
 import { imprimirTicket } from "@/lib/imprimir";
-import { useTurno, turnoLabel, TURNOS } from "@/lib/turno";
-import { SelectorTurno } from "@/components/selector-turno";
 import { TicketCierre } from "./ticket-cierre";
-import type { ResumenCaja } from "@/lib/types";
+import type { ResumenCaja, CajaAbierta } from "@/lib/types";
 
 export function CierreCliente({ esAdmin = false }: { esAdmin?: boolean }) {
-  const { turno, elegir, limpiar, listo } = useTurno();
   const [imprimible, setImprimible] = useState<{
     data: ResumenCaja;
     label: string;
   } | null>(null);
+  const [cajas, setCajas] = useState<CajaAbierta[] | null>(null);
 
-  // Lo maneja el padre para que la impresión sobreviva aunque el CierreTurno
-  // se desmonte (empleado: al cerrar se corta el turno).
+  useEffect(() => {
+    if (!esAdmin) return;
+    cajasAbiertas().then(setCajas);
+  }, [esAdmin]);
+
   function imprimir(data: ResumenCaja, label: string) {
     setImprimible({ data, label });
     imprimirTicket();
@@ -31,37 +36,32 @@ export function CierreCliente({ esAdmin = false }: { esAdmin?: boolean }) {
 
   let contenido: React.ReactNode;
   if (esAdmin) {
-    contenido = (
-      <div className="flex flex-col gap-4">
+    contenido =
+      cajas === null ? (
+        <p className="text-sm text-muted-foreground">Cargando…</p>
+      ) : cajas.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Ves las dos cajas. Podés cerrar cualquiera.
+          Ninguna caja abierta ahora mismo.
         </p>
-        <div className="flex flex-col gap-6 lg:flex-row">
-          {TURNOS.map((t) => (
-            <CierreTurno
-              key={t.valor}
-              caja={t.valor}
-              label={t.label}
-              onImprimir={imprimir}
-            />
-          ))}
+      ) : (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm text-muted-foreground">
+            Cajas abiertas por empleado. Podés cerrar cualquiera.
+          </p>
+          <div className="flex flex-col gap-6 lg:flex-row lg:flex-wrap">
+            {cajas.map((c) => (
+              <CierreCaja
+                key={c.empleado_id}
+                empleadoId={c.empleado_id}
+                label={c.nombre}
+                onImprimir={imprimir}
+              />
+            ))}
+          </div>
         </div>
-      </div>
-    );
-  } else if (listo && !turno) {
-    contenido = <SelectorTurno onElegir={elegir} />;
-  } else if (!turno) {
-    contenido = <p className="text-sm text-muted-foreground">Cargando…</p>;
+      );
   } else {
-    contenido = (
-      <CierreTurno
-        caja={turno}
-        label={turnoLabel(turno)}
-        onClosed={limpiar}
-        onCambiar={limpiar}
-        onImprimir={imprimir}
-      />
-    );
+    contenido = <CierreCaja label="Tu caja" onImprimir={imprimir} />;
   }
 
   return (
@@ -88,17 +88,13 @@ export function CierreCliente({ esAdmin = false }: { esAdmin?: boolean }) {
   );
 }
 
-function CierreTurno({
-  caja,
+function CierreCaja({
+  empleadoId,
   label,
-  onClosed,
-  onCambiar,
   onImprimir,
 }: {
-  caja: string;
+  empleadoId?: string;
   label: string;
-  onClosed?: () => void;
-  onCambiar?: () => void;
   onImprimir: (data: ResumenCaja, label: string) => void;
 }) {
   const router = useRouter();
@@ -111,13 +107,13 @@ function CierreTurno({
 
   useEffect(() => {
     let cancelado = false;
-    resumenCajaActual(caja).then((r) => {
+    resumenCajaActual(empleadoId).then((r) => {
       if (!cancelado) setResumen(r);
     });
     return () => {
       cancelado = true;
     };
-  }, [caja, recarga]);
+  }, [empleadoId, recarga]);
 
   const egresosEfec = Number(resumen?.egresos_efectivo ?? 0);
   const efectivoEsperado = resumen
@@ -133,7 +129,7 @@ function CierreTurno({
       return;
     }
     startTransition(async () => {
-      const res = await cerrarCaja(val, caja);
+      const res = await cerrarCaja(val, empleadoId);
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -141,33 +137,21 @@ function CierreTurno({
       const d = res.resumen.diferencia;
       toast.success(
         d == null
-          ? `${label} cerrado`
-          : `${label} cerrado — diferencia ${pesos(Number(d))}`,
+          ? `${label}: caja cerrada`
+          : `${label}: cerrada — diferencia ${pesos(Number(d))}`,
       );
       setContado("");
-      onImprimir(res.resumen, label); // imprime el comprobante del cierre
+      onImprimir(res.resumen, label);
       setRecarga((x) => x + 1);
-      onClosed?.(); // empleado: corta el turno (arranca caja nueva)
       router.refresh();
     });
   }
 
   return (
     <div className="flex w-full max-w-lg flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <span className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium">
-          {label}
-        </span>
-        {onCambiar ? (
-          <button
-            type="button"
-            onClick={onCambiar}
-            className="text-xs font-medium text-primary hover:underline"
-          >
-            Cambiar turno
-          </button>
-        ) : null}
-      </div>
+      <span className="w-fit rounded-lg bg-accent px-3 py-1.5 text-sm font-medium">
+        {label}
+      </span>
 
       {resumen === undefined ? (
         <p className="text-sm text-muted-foreground">Cargando…</p>
@@ -245,7 +229,7 @@ function CierreTurno({
               size="lg"
               className="max-w-xs"
             >
-              {pending ? "Cerrando…" : `Cerrar e imprimir — ${label}`}
+              {pending ? "Cerrando…" : "Cerrar e imprimir"}
             </Button>
             <Button
               variant="outline"

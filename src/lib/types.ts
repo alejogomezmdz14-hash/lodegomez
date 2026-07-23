@@ -97,6 +97,14 @@ export type ResumenCaja = {
   diferencia?: number | null;
 };
 
+// Caja abierta de un empleado (para el admin en el cierre).
+export type CajaAbierta = {
+  empleado_id: string;
+  nombre: string;
+  cant: number;
+  total: number;
+};
+
 // Egresos de caja (retiros + pagos a proveedores).
 export type TipoEgreso = "retiro" | "pago_proveedor";
 

@@ -10,8 +10,6 @@ import { Input } from "@/components/ui/input";
 import { pesos, redondear2, parseNumeroAR } from "@/lib/formato";
 import { imprimirTicket } from "@/lib/imprimir";
 import { NuevoProductoDialog } from "@/components/nuevo-producto-dialog";
-import { SelectorTurno } from "@/components/selector-turno";
-import { useTurno, turnoLabel, type Turno } from "@/lib/turno";
 import {
   MEDIOS_COBRO,
   type CartItem,
@@ -30,9 +28,8 @@ import { FacturaPaso } from "./factura-paso";
 import { TicketFiscal } from "./ticket-fiscal";
 import type { ComprobanteImpresion } from "@/lib/actions/comprobantes";
 
-export function CajaCliente({ esAdmin = false }: { esAdmin?: boolean }) {
+export function CajaCliente() {
   const [supabase] = useState(() => createClient());
-  const { turno, elegir, limpiar, listo } = useTurno();
   const codigoRef = useRef<HTMLInputElement>(null);
   const cobrandoRef = useRef(false); // guarda síncrona contra doble cobro
 
@@ -293,7 +290,6 @@ export function CajaCliente({ esAdmin = false }: { esAdmin?: boolean }) {
       const res = await registrarVenta(
         pagos,
         items.map((it) => ({ producto_id: it.producto_id, cantidad: it.cantidad })),
-        turno ?? "principal",
       );
       if (!res.ok) {
         toast.error(res.error);
@@ -318,33 +314,6 @@ export function CajaCliente({ esAdmin = false }: { esAdmin?: boolean }) {
       <div className="flex h-full min-h-0 flex-col print:hidden lg:flex-row">
         {/* Captura: código + buscador */}
         <section className="flex shrink-0 flex-col gap-3 border-b p-4 lg:w-96 lg:shrink-0 lg:border-b-0 lg:border-r">
-          {esAdmin ? (
-            <div className="flex items-center gap-2 rounded-lg bg-accent px-3 py-1.5 text-sm">
-              <span className="text-xs text-muted-foreground">Turno:</span>
-              <select
-                value={turno ?? ""}
-                onChange={(e) =>
-                  e.target.value ? elegir(e.target.value as Turno) : limpiar()
-                }
-                className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm"
-              >
-                <option value="">Todos los turnos</option>
-                <option value="manana">Turno mañana</option>
-                <option value="tarde">Turno tarde</option>
-              </select>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between rounded-lg bg-accent px-3 py-1.5 text-sm">
-              <span className="font-medium">{turnoLabel(turno)}</span>
-              <button
-                type="button"
-                onClick={limpiar}
-                className="text-xs font-medium text-primary hover:underline"
-              >
-                Cambiar turno
-              </button>
-            </div>
-          )}
           <form onSubmit={onSubmitCodigo}>
             <Input
               ref={codigoRef}
@@ -516,10 +485,6 @@ export function CajaCliente({ esAdmin = false }: { esAdmin?: boolean }) {
       />
 
       <Ticket venta={ticket} />
-
-      {listo && !turno && !esAdmin ? (
-        <SelectorTurno onElegir={elegir} />
-      ) : null}
     </>
   );
 }

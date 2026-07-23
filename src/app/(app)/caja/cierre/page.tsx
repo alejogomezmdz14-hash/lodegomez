@@ -6,9 +6,6 @@ import { CierreCliente } from "./cierre-cliente";
 import { pesos } from "@/lib/formato";
 import type { CierreHistorial } from "@/lib/types";
 
-const turnoLbl = (caja?: string) =>
-  caja === "manana" ? "Mañana" : caja === "tarde" ? "Tarde" : "—";
-
 export default async function CierrePage({
   searchParams,
 }: {
@@ -29,7 +26,7 @@ export default async function CierrePage({
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold tracking-tight">Cierre de caja</h1>
           <p className="text-sm text-muted-foreground">
-            Cuánto entró en el turno por cada medio de pago.
+            Tu caja: lo que entró desde tu último cierre, por medio de pago.
           </p>
         </div>
         <CierreCliente esAdmin={u?.rol === "admin"} />
@@ -48,8 +45,7 @@ export default async function CierrePage({
               <thead className="border-b text-muted-foreground">
                 <tr>
                   <th className="px-4 py-2 font-medium">Fecha</th>
-                  <th className="px-4 py-2 font-medium">Turno</th>
-                  <th className="px-4 py-2 font-medium">Cerró</th>
+                  <th className="px-4 py-2 font-medium">Empleado</th>
                   <th className="px-4 py-2 text-right font-medium">Ventas</th>
                   <th className="px-4 py-2 text-right font-medium">Total</th>
                   <th className="px-4 py-2 text-right font-medium">Efectivo</th>
@@ -70,7 +66,6 @@ export default async function CierrePage({
                           minute: "2-digit",
                         })}
                       </td>
-                      <td className="px-4 py-2">{turnoLbl(c.caja_id)}</td>
                       <td className="px-4 py-2">{c.empleado_nombre ?? "—"}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{c.cant_ventas}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{pesos(Number(c.total))}</td>
