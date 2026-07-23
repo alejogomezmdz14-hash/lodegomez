@@ -169,7 +169,6 @@ function CierreCaja({
               {(
                 [
                   ["Efectivo", resumen.total_efectivo],
-                  ["QR", resumen.total_qr],
                   ["Tarjeta", resumen.total_tarjeta],
                   ["Transferencia", resumen.total_transferencia],
                 ] as const

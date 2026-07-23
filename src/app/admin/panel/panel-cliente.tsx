@@ -182,9 +182,8 @@ export function PanelCliente() {
       {/* Medios de pago */}
       <Card className="flex flex-col gap-2 p-4">
         <p className="text-sm font-medium">Por medio de pago</p>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3">
           <MedioFila label="Efectivo" v={metricas?.efectivo} />
-          <MedioFila label="QR" v={metricas?.qr} />
           <MedioFila label="Tarjeta" v={metricas?.tarjeta} />
           <MedioFila label="Transferencia" v={metricas?.transferencia} />
         </div>

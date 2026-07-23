@@ -46,7 +46,6 @@ export function TicketCierre({
         {fila("Ventas", String(data.cant_ventas))}
         <div className="my-1 border-t border-dashed border-black" />
         {fila("Efectivo", pesos(Number(data.total_efectivo)))}
-        {fila("QR", pesos(Number(data.total_qr)))}
         {fila("Tarjeta", pesos(Number(data.total_tarjeta)))}
         {fila("Transferencia", pesos(Number(data.total_transferencia)))}
         <div className="my-1 border-t border-dashed border-black" />

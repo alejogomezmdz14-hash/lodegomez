@@ -346,9 +346,8 @@ export function CajaCliente() {
             <div className="flex items-center gap-1">
             {items.length > 0 ? (
               <Button
-                variant="outline"
-                size="sm"
                 onClick={foco}
+                className="border-2 border-primary bg-primary/10 font-bold text-primary shadow-sm hover:bg-primary hover:text-primary-foreground"
                 title="Volver a agregar productos sin perder la venta"
               >
                 ← Seguir agregando
