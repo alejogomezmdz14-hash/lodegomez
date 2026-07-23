@@ -3,7 +3,7 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import { registrarVenta } from "@/lib/actions/ventas";
+import { registrarVenta, anularVenta } from "@/lib/actions/ventas";
 import { useScanner } from "@/lib/hooks/use-scanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -463,6 +463,17 @@ export function CajaCliente() {
           <div className="mx-auto max-w-md">
             <FacturaPaso
               ventaId={postVenta.id}
+              onVolver={async () => {
+                const id = postVenta.id;
+                const res = await anularVenta(id, "Cancelada en el momento");
+                if (!res.ok) {
+                  toast.error(res.error);
+                  return;
+                }
+                toast.success("Venta cancelada — se devolvió el stock");
+                setPostVenta(null);
+                foco();
+              }}
               onSaltar={() => {
                 setTicket(postVenta); // imprime el ticket común (no fiscal)
                 setPostVenta(null);

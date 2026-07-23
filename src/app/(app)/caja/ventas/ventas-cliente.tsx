@@ -315,15 +315,29 @@ export function VentasCliente({
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                              v.estado === "activa"
-                                ? "bg-primary/10 text-primary"
-                                : "bg-muted text-muted-foreground"
-                            }`}
-                          >
-                            {v.estado}
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1">
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                                v.estado === "activa"
+                                  ? "bg-primary/10 text-primary"
+                                  : "bg-muted text-muted-foreground"
+                              }`}
+                            >
+                              {v.estado}
+                            </span>
+                            {v.estado === "activa" ? (
+                              <span
+                                className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+                                title={
+                                  v.cierre_id
+                                    ? "Ya entró en un cierre de caja"
+                                    : "Todavía en la caja abierta (sin cerrar)"
+                                }
+                              >
+                                {v.cierre_id ? "cerrada" : "en caja"}
+                              </span>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex justify-end gap-2">

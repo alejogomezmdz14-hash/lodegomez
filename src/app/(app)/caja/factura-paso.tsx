@@ -17,10 +17,12 @@ export function FacturaPaso({
   ventaId,
   onListo,
   onSaltar,
+  onVolver,
 }: {
   ventaId: string;
   onListo: (data: ComprobanteImpresion) => void;
   onSaltar: () => void;
+  onVolver?: () => void;
 }) {
   const [emitiendo, setEmitiendo] = useState(false);
   const [modoA, setModoA] = useState(false);
@@ -28,7 +30,7 @@ export function FacturaPaso({
   const [resultados, setResultados] = useState<Cliente[]>([]);
   const [sel, setSel] = useState(0); // 0 Sin factura · 1 Factura B · 2 Factura A
 
-  // Flechas eligen la opción; Enter la confirma (solo en la vista inicial).
+  // Flechas eligen la opción; Enter la confirma; Esc vuelve (cancela la venta).
   useEffect(() => {
     if (modoA) return;
     function onKey(e: KeyboardEvent) {
@@ -44,6 +46,9 @@ export function FacturaPaso({
         if (sel === 0) onSaltar();
         else if (sel === 1) emitir("B");
         else setModoA(true);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        if (!emitiendo) onVolver?.();
       }
     }
     window.addEventListener("keydown", onKey);
@@ -135,6 +140,16 @@ export function FacturaPaso({
       <p className="text-center text-xs text-muted-foreground">
         Flechas ← → para elegir · Enter para confirmar
       </p>
+      {onVolver ? (
+        <button
+          type="button"
+          disabled={emitiendo}
+          onClick={onVolver}
+          className="text-center text-xs font-medium text-destructive hover:underline"
+        >
+          ← Volver (cancelar esta venta)
+        </button>
+      ) : null}
     </div>
   );
 }
