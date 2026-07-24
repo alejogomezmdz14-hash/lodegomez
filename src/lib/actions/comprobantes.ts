@@ -388,15 +388,21 @@ export async function estadosFiscales(
   if (!u) return {};
   if (ventaIds.length === 0) return {};
   const admin = createAdminClient();
-  const { data } = await admin
-    .from("comprobantes")
-    .select("venta_id,tipo,estado")
-    .in("venta_id", ventaIds);
   const map: Record<string, { estado: string; tipo: string | null }> = {};
-  for (const c of data ?? []) {
-    const vid = c.venta_id as string;
-    if (map[vid]?.estado === "emitido") continue; // no pisar un emitido
-    map[vid] = { estado: c.estado as string, tipo: c.tipo as string };
+  // Consultar en lotes: un solo .in() con miles de ids arma una URL enorme que
+  // hace fallar la consulta (y entonces TODO figura "sin factura").
+  const LOTE = 200;
+  for (let i = 0; i < ventaIds.length; i += LOTE) {
+    const lote = ventaIds.slice(i, i + LOTE);
+    const { data } = await admin
+      .from("comprobantes")
+      .select("venta_id,tipo,estado")
+      .in("venta_id", lote);
+    for (const c of data ?? []) {
+      const vid = c.venta_id as string;
+      if (map[vid]?.estado === "emitido") continue; // no pisar un emitido
+      map[vid] = { estado: c.estado as string, tipo: c.tipo as string };
+    }
   }
   return map;
 }
