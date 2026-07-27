@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { buscarClientes, crearCliente } from "@/lib/actions/clientes";
 import { emitirComprobante, type ComprobanteImpresion } from "@/lib/actions/comprobantes";
 import { COND_IVA, type Cliente } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 // Condiciones de IVA válidas como receptor de Factura A (no Consumidor Final).
 const COND_IVA_A = COND_IVA.filter((c) => c.valor !== 5);
@@ -114,25 +113,26 @@ export function FacturaPaso({
       <span className="text-sm text-muted-foreground">¿Factura?</span>
       <div className="grid grid-cols-3 gap-2">
         <Button
-          variant="outline"
+          variant={sel === 0 ? "default" : "outline"}
           disabled={emitiendo}
           onClick={onSaltar}
-          className={cn("h-12", sel === 0 && "ring-2 ring-primary ring-offset-1")}
+          className="h-12"
         >
           Sin factura
         </Button>
         <Button
+          variant={sel === 1 ? "default" : "outline"}
           disabled={emitiendo}
           onClick={() => emitir("B")}
-          className={cn("h-12", sel === 1 && "ring-2 ring-primary ring-offset-1")}
+          className="h-12"
         >
           Factura B
         </Button>
         <Button
-          variant="secondary"
+          variant={sel === 2 ? "default" : "outline"}
           disabled={emitiendo}
           onClick={() => setModoA(true)}
-          className={cn("h-12", sel === 2 && "ring-2 ring-primary ring-offset-1")}
+          className="h-12"
         >
           Factura A
         </Button>
