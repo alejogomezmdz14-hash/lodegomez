@@ -32,6 +32,7 @@ export function CajaCliente() {
   const [supabase] = useState(() => createClient());
   const codigoRef = useRef<HTMLInputElement>(null);
   const cobrandoRef = useRef(false); // guarda síncrona contra doble cobro
+  const buscandoRef = useRef(0); // productos escaneados que todavía no entraron al carrito
 
   const [codigo, setCodigo] = useState("");
   const [term, setTerm] = useState("");
@@ -133,21 +134,40 @@ export function CajaCliente() {
   async function resolverCodigo(cod: string) {
     const c = cod.trim();
     if (!c) return;
-    const { data, error } = await supabase
-      .from("productos")
-      .select("*")
-      .eq("codigo", c)
-      .eq("activo", true)
-      .maybeSingle();
-    if (error) {
-      toast.error("Error al buscar el producto");
+    buscandoRef.current++;
+    try {
+      const { data, error } = await supabase
+        .from("productos")
+        .select("*")
+        .eq("codigo", c)
+        .eq("activo", true)
+        .maybeSingle();
+      if (error) {
+        toast.error("Error al buscar el producto");
+        return;
+      }
+      if (!data) {
+        setAltaCodigo(c); // no existe → ofrecer darlo de alta con ese código
+        return;
+      }
+      agregarProducto(data as Producto);
+    } finally {
+      buscandoRef.current--;
+    }
+  }
+
+  // Punto único de entrada al carrito (scan y buscador). Un producto sin precio
+  // se rechaza ACÁ nombrándolo: antes entraba al carrito en $0 y la venta recién
+  // fallaba al cobrar con un error genérico, sin decir cuál ítem era.
+  function agregarProducto(p: Producto) {
+    const precio = Number((p.es_pesable ? p.precio_por_kg : p.precio_venta) ?? 0);
+    if (!(precio > 0)) {
+      toast.error(
+        `"${p.descripcion ?? p.codigo}" no tiene precio cargado. Cargáselo en Productos para poder venderlo.`,
+        { duration: 6000 },
+      );
       return;
     }
-    if (!data) {
-      setAltaCodigo(c); // no existe → ofrecer darlo de alta con ese código
-      return;
-    }
-    const p = data as Producto;
     if (p.es_pesable) setPesable(p);
     else agregarNormal(p);
   }
@@ -197,15 +217,19 @@ export function CajaCliente() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (pesable || altaCodigo || postVenta) return;
+      // Solo ← y → (es lo que promete el cartelito). Y solo cuando las flechas
+      // no le sirven a un input: si está tipeando en cualquier campo —incluido
+      // el de código con algo escrito— las flechas mueven el cursor y NO deben
+      // cambiar el medio de pago a espaldas del cajero.
+      if (!["ArrowLeft", "ArrowRight"].includes(e.key)) return;
       const el = document.activeElement as HTMLElement | null;
-      const enOtroInput =
-        !!el &&
-        (el.tagName === "INPUT" || el.tagName === "TEXTAREA") &&
-        el !== codigoRef.current;
-      if (enOtroInput) return;
-      if (!["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"].includes(e.key)) return;
+      const enInput =
+        !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
+      const codigoVacio =
+        el === codigoRef.current && (codigoRef.current?.value ?? "") === "";
+      if (enInput && !codigoVacio) return;
       e.preventDefault();
-      const dir = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
+      const dir = e.key === "ArrowRight" ? 1 : -1;
       const opciones: (MedioPago | "dividir")[] = [
         ...MEDIOS_COBRO.map((m) => m.valor),
         "dividir",
@@ -276,6 +300,12 @@ export function CajaCliente() {
 
   async function cobrar() {
     if (cobrandoRef.current) return; // ya hay un cobro en curso → no duplicar
+    // Hay un producto escaneado que todavía no entró al carrito: cobrar ahora
+    // dejaría la venta corta y el ítem se colaría en la venta siguiente.
+    if (buscandoRef.current > 0) {
+      toast.warning("Esperá, se está agregando el último producto…");
+      return;
+    }
     if (items.length === 0) return;
     if (!pagos) {
       toast.error(dividido ? "El pago no cubre el total" : "Elegí un medio de pago");
@@ -329,8 +359,7 @@ export function CajaCliente() {
             term={term}
             onTermChange={setTerm}
             onElegir={(p) => {
-              if (p.es_pesable) setPesable(p);
-              else agregarNormal(p);
+              agregarProducto(p);
               setTerm("");
               foco();
             }}

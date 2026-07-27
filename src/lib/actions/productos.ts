@@ -46,6 +46,19 @@ export async function actualizarProducto(
   }
 
   const supabase = await createClient();
+
+  // Pesables: el POS cobra por `precio_por_kg`, no por `precio_venta`. Si solo
+  // se guardara precio_venta, editar el precio de la verdura/fiambre no cambiaría
+  // lo que cobra la caja. Se escriben los dos juntos.
+  if (patch.precio_venta !== undefined) {
+    const { data: p } = await supabase
+      .from("productos")
+      .select("es_pesable")
+      .eq("id", id)
+      .maybeSingle();
+    if (p?.es_pesable) patch.precio_por_kg = patch.precio_venta;
+  }
+
   const { data, error } = await supabase
     .from("productos")
     .update(patch)

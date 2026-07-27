@@ -76,6 +76,30 @@ export async function borrarUsuario(usuarioId: string): Promise<Resultado> {
     return { ok: false, error: "No podés borrar tu propio usuario." };
   }
   const admin = createAdminClient();
+
+  // Si tiene caja abierta, sus ventas/egresos quedarían con empleado_id null
+  // (FK on delete set null) y ningún cierre podría reclamarlos nunca más: esa
+  // plata desaparecería de los cierres. Primero hay que cerrarle la caja.
+  const [{ count: ventasAbiertas }, { count: egresosAbiertos }] = await Promise.all([
+    admin
+      .from("ventas")
+      .select("*", { count: "exact", head: true })
+      .eq("empleado_id", usuarioId)
+      .eq("estado", "activa")
+      .is("cierre_id", null),
+    admin
+      .from("movimientos_caja")
+      .select("*", { count: "exact", head: true })
+      .eq("empleado_id", usuarioId)
+      .is("cierre_id", null),
+  ]);
+  if ((ventasAbiertas ?? 0) > 0 || (egresosAbiertos ?? 0) > 0) {
+    return {
+      ok: false,
+      error: `No se puede borrar: tiene la caja abierta (${ventasAbiertas ?? 0} venta(s) y ${egresosAbiertos ?? 0} egreso(s) sin cerrar). Cerrale la caja desde Cierre y volvé a intentar.`,
+    };
+  }
+
   const { error } = await admin.auth.admin.deleteUser(usuarioId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };

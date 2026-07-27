@@ -15,7 +15,9 @@ export async function registrarEgreso(input: {
   medio_pago: MedioPago;
   monto: number;
   detalle?: string;
-  cajaId?: string;
+  // De qué caja sale la plata. Solo un admin puede indicar la de otro empleado
+  // (ej: el dueño saca efectivo del cajón del cajero). Por defecto, la propia.
+  empleadoId?: string;
 }): Promise<ResultadoEgreso> {
   const u = await getUsuarioActual();
   if (!u) return { ok: false, error: "No autorizado" };
@@ -24,6 +26,10 @@ export async function registrarEgreso(input: {
   }
   if (!Number.isFinite(input.monto) || input.monto <= 0) {
     return { ok: false, error: "Poné un monto válido." };
+  }
+  const deOtro = !!input.empleadoId && input.empleadoId !== u.id;
+  if (deOtro && u.rol !== "admin") {
+    return { ok: false, error: "Solo un admin puede cargar un egreso a la caja de otro." };
   }
   // El retiro de caja siempre es efectivo.
   const medio = input.tipo === "retiro" ? "efectivo" : input.medio_pago;
@@ -34,7 +40,9 @@ export async function registrarEgreso(input: {
     medio_pago: medio,
     monto: input.monto,
     detalle: input.detalle?.trim() || null,
-    caja_id: input.cajaId?.trim() || "principal",
+    caja_id: "principal",
+    empleado_id: input.empleadoId || u.id, // de qué caja sale
+    // `registrado_por` (quién lo cargó) lo pone el DEFAULT auth.uid() de la 0020.
   });
   if (error) return { ok: false, error: error.message };
   return { ok: true };

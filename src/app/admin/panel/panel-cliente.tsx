@@ -186,6 +186,11 @@ export function PanelCliente() {
           <MedioFila label="Efectivo" v={metricas?.efectivo} />
           <MedioFila label="Tarjeta" v={metricas?.tarjeta} />
           <MedioFila label="Transferencia" v={metricas?.transferencia} />
+          {/* QR ya no se usa al cobrar, pero las ventas viejas lo tienen: si no
+              se muestra, la suma de los medios no cuadra con "Vendido". */}
+          {Number(metricas?.qr ?? 0) > 0 ? (
+            <MedioFila label="QR (ventas viejas)" v={metricas?.qr} />
+          ) : null}
         </div>
       </Card>
 

@@ -8,16 +8,25 @@ import { registrarEgreso, borrarEgreso, listarEgresos } from "@/lib/actions/egre
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { pesos, parseNumeroAR } from "@/lib/formato";
-import type { Egreso, MedioPago, TipoEgreso } from "@/lib/types";
+import type { Egreso, MedioPago, TipoEgreso, CajaAbierta } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export function EgresosCliente({ inicial }: { inicial: Egreso[] }) {
+export function EgresosCliente({
+  inicial,
+  esAdmin = false,
+  cajas = [],
+}: {
+  inicial: Egreso[];
+  esAdmin?: boolean;
+  cajas?: CajaAbierta[];
+}) {
   const router = useRouter();
   const [egresos, setEgresos] = useState<Egreso[]>(inicial);
   const [tipo, setTipo] = useState<TipoEgreso>("retiro");
   const [medio, setMedio] = useState<MedioPago>("efectivo");
   const [monto, setMonto] = useState("");
   const [detalle, setDetalle] = useState("");
+  const [caja, setCaja] = useState(""); // "" = mi propia caja
   const [pending, startTransition] = useTransition();
 
   function registrar() {
@@ -32,6 +41,7 @@ export function EgresosCliente({ inicial }: { inicial: Egreso[] }) {
         medio_pago: tipo === "retiro" ? "efectivo" : medio,
         monto: m,
         detalle: detalle.trim() || undefined,
+        empleadoId: caja || undefined,
       });
       if (!res.ok) {
         toast.error(res.error);
@@ -93,6 +103,28 @@ export function EgresosCliente({ inicial }: { inicial: Egreso[] }) {
           </p>
         )}
 
+        {esAdmin && cajas.length > 0 ? (
+          <label className="flex flex-col gap-1 text-sm">
+            ¿De qué caja sale la plata?
+            <select
+              value={caja}
+              onChange={(e) => setCaja(e.target.value)}
+              className="h-11 rounded-lg border-2 border-border bg-background px-2 text-sm"
+            >
+              <option value="">Mi caja</option>
+              {cajas.map((c) => (
+                <option key={c.empleado_id} value={c.empleado_id}>
+                  Caja de {c.nombre}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-muted-foreground">
+              Si sacás efectivo del cajón de un empleado, elegí su caja: así le
+              resta a él y no le queda un faltante.
+            </span>
+          </label>
+        ) : null}
+
         <label className="flex flex-col gap-1 text-sm">
           Monto
           <Input
@@ -142,8 +174,13 @@ export function EgresosCliente({ inicial }: { inicial: Egreso[] }) {
                     {e.detalle || (e.tipo === "retiro" ? "Retiro de caja" : "Pago a proveedor")}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {e.medio_pago === "efectivo" ? "Efectivo" : "Transferencia"} ·{" "}
-                    {e.empleado_nombre ?? "—"} ·{" "}
+                    {e.medio_pago === "efectivo" ? "Efectivo" : "Transferencia"} · caja
+                    de {e.empleado_nombre ?? "—"}
+                    {e.registrado_por_nombre &&
+                    e.registrado_por_nombre !== e.empleado_nombre
+                      ? ` (cargado por ${e.registrado_por_nombre})`
+                      : ""}{" "}
+                    ·{" "}
                     {new Date(e.creada_en).toLocaleString("es-AR", {
                       day: "2-digit",
                       month: "2-digit",

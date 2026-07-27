@@ -13,7 +13,7 @@ import {
 import { NuevoProductoDialog } from "@/components/nuevo-producto-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { pesos, parseNumeroAR } from "@/lib/formato";
+import { pesos, parseNumeroAR, numeroAR } from "@/lib/formato";
 import type { Producto } from "@/lib/types";
 
 export function ProductosCliente() {
@@ -176,9 +176,9 @@ function FilaProducto({
   producto: Producto;
   onQuitar: (id: string) => void;
 }) {
-  const iP = String(producto.precio_venta ?? "");
-  const iC = String(producto.precio_costo ?? "");
-  const iS = String(producto.stock ?? "");
+  const iP = numeroAR(producto.precio_venta);
+  const iC = numeroAR(producto.precio_costo);
+  const iS = numeroAR(producto.stock);
   const calcMargen = (c: string, p: string) => {
     const cn = parseNumeroAR(c);
     const pn = parseNumeroAR(p);
@@ -213,7 +213,9 @@ function FilaProducto({
     const cn = parseNumeroAR(costo);
     const mn = parseNumeroAR(v);
     if (cn && cn > 0 && mn !== null) {
-      setPrecio(String(Math.round(cn * (1 + mn / 100) * 100) / 100));
+      // numeroAR (coma decimal), NO String(): String(1232.5)="1232.5" y
+      // parseNumeroAR borraría el punto -> guardaría $12.325.
+      setPrecio(numeroAR(cn * (1 + mn / 100)));
     }
   }
 
@@ -250,9 +252,9 @@ function FilaProducto({
         toast.error(res.error);
         return;
       }
-      const np = res.precio_venta === null ? "" : String(res.precio_venta);
-      const nc = res.precio_costo === null ? "" : String(res.precio_costo);
-      const ns = String(res.stock);
+      const np = numeroAR(res.precio_venta);
+      const nc = numeroAR(res.precio_costo);
+      const ns = numeroAR(res.stock);
       setPrecio(np);
       setCosto(nc);
       setStock(ns);

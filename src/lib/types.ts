@@ -116,7 +116,8 @@ export type Egreso = {
   detalle: string | null;
   cierre_id: string | null;
   creada_en: string;
-  empleado_nombre?: string | null;
+  empleado_nombre?: string | null; // de qué caja salió
+  registrado_por_nombre?: string | null; // quién lo cargó
 };
 
 // Fila de la lista de ventas (pantalla de ventas/anulación).
