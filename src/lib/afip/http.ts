@@ -22,8 +22,19 @@ export async function afipPost(
       body,
       dispatcher: afipAgent,
     });
-    return await res.text();
+    const texto = await res.text();
+    // AFIP caído devuelve una página HTML ("Service Unavailable"), no XML. Sin
+    // este chequeo, ese HTML se parseaba como respuesta y terminaba mostrándose
+    // crudo en pantalla al cajero.
+    if (!res.ok) {
+      throw new Error(`AFIP_CAIDO:${etiqueta}:HTTP ${res.status}`);
+    }
+    if (/^\s*<(!doctype|html)\b/i.test(texto)) {
+      throw new Error(`AFIP_CAIDO:${etiqueta}:respuesta HTML`);
+    }
+    return texto;
   } catch (e) {
+    if (e instanceof Error && e.message.startsWith("AFIP_CAIDO:")) throw e;
     const c = (e as { cause?: { code?: string; message?: string } }).cause;
     throw new Error(
       `conexion ${etiqueta} fallo: ${c?.code ?? c?.message ?? (e as Error).message}`,

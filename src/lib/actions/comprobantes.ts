@@ -29,6 +29,18 @@ const COMP_COLS =
   "cond_iva_receptor,cliente_nombre,neto,iva,exento,total,cae,cae_vto,qr_payload," +
   "estado,error_detalle,emitido_en";
 
+// Traduce el error técnico de AFIP a algo que el cajero pueda accionar. El
+// detalle técnico igual se guarda en comprobantes.error_detalle.
+function mensajeAfip(err: string): string {
+  const e = err || "";
+  if (/AFIP_CAIDO|Service Unavailable|<html|<!doctype/i.test(e))
+    return "AFIP no está respondiendo (se les cayó el servicio). La venta YA quedó guardada: seguí cobrando y emitila más tarde desde Ventas → Reintentar.";
+  if (/ECONNRESET|fetch failed|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|conexion .* fallo/i.test(e))
+    return "No se pudo conectar con AFIP (conexión). La venta YA quedó guardada: reintentá la factura desde Ventas cuando vuelva.";
+  if (/no se pudo verificar el estado/i.test(e)) return e;
+  return `AFIP: ${e || "no se pudo emitir"}`;
+}
+
 // AFIP devuelve fechas como yyyymmdd (número o string); el QR y la DB usan
 // yyyy-mm-dd.
 function fechaAfipAIso(v: number | string): string {
@@ -312,7 +324,7 @@ export async function emitirComprobante(
         numero: numero || null,
       })
       .eq("id", rowId);
-    return { ok: false, error: `AFIP: ${ultimoError || "no se pudo emitir"}` };
+    return { ok: false, error: mensajeAfip(ultimoError) };
   }
 
   // Éxito → QR (misma fecha del comprobante) y marcar 'emitido'.

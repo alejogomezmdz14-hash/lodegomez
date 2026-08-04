@@ -60,7 +60,7 @@ export function FacturaPaso({
     const res = await emitirComprobante({ venta_id: ventaId, tipo, cliente_id: clienteId });
     setEmitiendo(false);
     if (!res.ok) {
-      toast.error(res.error);
+      toast.error(res.error, { duration: 10000 });
       return;
     }
     toast.success(`Factura ${tipo} emitida`);
