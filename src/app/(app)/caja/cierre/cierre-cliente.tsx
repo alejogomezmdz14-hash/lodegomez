@@ -179,6 +179,14 @@ function CierreCaja({
                 </li>
               ))}
             </ul>
+            {Number(resumen.total_cuenta ?? 0) > 0 ? (
+              <div className="mt-1 flex justify-between text-sm text-amber-700">
+                <span>Cuenta corriente (casa) — no entró plata</span>
+                <span className="tabular-nums">
+                  {pesos(Number(resumen.total_cuenta))}
+                </span>
+              </div>
+            ) : null}
             <div className="mt-2 flex justify-between border-t pt-2 text-base font-semibold">
               <span>Total</span>
               <span className="tabular-nums">{pesos(Number(resumen.total))}</span>

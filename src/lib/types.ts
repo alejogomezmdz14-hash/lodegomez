@@ -1,7 +1,12 @@
 // Tipos del dominio (a mano para el MVP; migrar a `supabase gen types` al
 // estabilizar el schema, fin de Etapa 2/3).
 
-export type MedioPago = "efectivo" | "qr" | "tarjeta" | "transferencia";
+export type MedioPago =
+  | "efectivo"
+  | "qr"
+  | "tarjeta"
+  | "transferencia"
+  | "cuenta_corriente";
 export type EstadoVenta = "activa" | "anulada" | "devuelta";
 
 export const MEDIOS_PAGO: { valor: MedioPago; label: string }[] = [
@@ -9,6 +14,7 @@ export const MEDIOS_PAGO: { valor: MedioPago; label: string }[] = [
   { valor: "qr", label: "QR" },
   { valor: "tarjeta", label: "Tarjeta" },
   { valor: "transferencia", label: "Transferencia" },
+  { valor: "cuenta_corriente", label: "Cuenta corriente" },
 ];
 
 // Medios ofrecidos al cobrar (sin QR; en su lugar va "Dividir pago").
@@ -90,6 +96,7 @@ export type ResumenCaja = {
   total_qr: number;
   total_tarjeta: number;
   total_transferencia: number;
+  total_cuenta?: number;
   egresos_efectivo?: number;
   egresos_transferencia?: number;
   efectivo_esperado?: number;
@@ -151,6 +158,7 @@ export type MetricasPeriodo = {
   qr: number;
   tarjeta: number;
   transferencia: number;
+  cuenta_corriente?: number; // gastos de la casa (no cuenta como vendido)
   margen: number;
   anulaciones: number;
 };
@@ -210,6 +218,7 @@ export type CierreHistorial = {
   total_qr: number;
   total_tarjeta: number;
   total_transferencia: number;
+  total_cuenta?: number;
   egresos_efectivo?: number;
   efectivo_contado: number | null;
   diferencia: number | null;

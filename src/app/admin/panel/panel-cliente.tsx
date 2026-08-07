@@ -60,10 +60,19 @@ function rangoDiaLocal(dia: string): { desde: string; hasta: string } {
   return { desde: d.toISOString(), hasta: hasta.toISOString() };
 }
 
+// Rango de un mes entero ("2026-07") -> [1 del mes, 1 del mes siguiente).
+function rangoMesLocal(mes: string): { desde: string; hasta: string } {
+  const [a, m] = mes.split("-").map(Number);
+  const desde = new Date(a, m - 1, 1);
+  const hasta = new Date(a, m, 1);
+  return { desde: desde.toISOString(), hasta: hasta.toISOString() };
+}
+
 export function PanelCliente() {
   const [supabase] = useState(() => createClient());
   const [preset, setPreset] = useState<Preset>("hoy");
   const [dia, setDia] = useState(""); // día puntual del calendario (vacío = usar preset)
+  const [mes, setMes] = useState(""); // mes entero (vacío = no usar)
   const [metricas, setMetricas] = useState<MetricasPeriodo | null>(null);
   const [ranking, setRanking] = useState<RankingItem[]>([]);
   const [eventos, setEventos] = useState<EventoDueno[]>([]);
@@ -74,7 +83,11 @@ export function PanelCliente() {
 
   useEffect(() => {
     let cancelado = false;
-    const { desde, hasta } = dia ? rangoDiaLocal(dia) : rango(preset);
+    const { desde, hasta } = dia
+      ? rangoDiaLocal(dia)
+      : mes
+        ? rangoMesLocal(mes)
+        : rango(preset);
     (async () => {
       setCargando(true);
       const [m, r, e, emp, egr] = await Promise.all([
@@ -108,7 +121,7 @@ export function PanelCliente() {
     return () => {
       cancelado = true;
     };
-  }, [preset, dia, supabase]);
+  }, [preset, dia, mes, supabase]);
 
   async function marcarLeido(id: string) {
     setEventos((prev) =>
@@ -133,10 +146,11 @@ export function PanelCliente() {
         {PRESETS.map((p) => (
           <Button
             key={p.id}
-            variant={!dia && preset === p.id ? "default" : "outline"}
+            variant={!dia && !mes && preset === p.id ? "default" : "outline"}
             size="sm"
             onClick={() => {
               setDia("");
+              setMes("");
               setPreset(p.id);
             }}
           >
@@ -144,14 +158,39 @@ export function PanelCliente() {
           </Button>
         ))}
         <span className="mx-1 text-muted-foreground">·</span>
-        <Input
-          type="date"
-          value={dia}
-          onChange={(e) => setDia(e.target.value)}
-          className="h-8 w-auto text-sm"
-        />
-        {dia ? (
-          <Button variant="ghost" size="sm" onClick={() => setDia("")}>
+        <label className="flex items-center gap-1 text-xs text-muted-foreground">
+          Día
+          <Input
+            type="date"
+            value={dia}
+            onChange={(e) => {
+              setDia(e.target.value);
+              if (e.target.value) setMes("");
+            }}
+            className="h-8 w-auto text-sm"
+          />
+        </label>
+        <label className="flex items-center gap-1 text-xs text-muted-foreground">
+          Mes
+          <Input
+            type="month"
+            value={mes}
+            onChange={(e) => {
+              setMes(e.target.value);
+              if (e.target.value) setDia("");
+            }}
+            className="h-8 w-auto text-sm"
+          />
+        </label>
+        {dia || mes ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setDia("");
+              setMes("");
+            }}
+          >
             Ver período
           </Button>
         ) : null}
@@ -177,7 +216,21 @@ export function PanelCliente() {
       <p className="-mt-3 text-xs text-muted-foreground">
         Ganancia = precio − costo de cada producto vendido. Solo cuenta los que
         tienen el costo cargado (cargalos en Productos para que sea exacta).
+        “Vendido” y “Ganancia” no incluyen la cuenta corriente (ahí no entró plata).
       </p>
+
+      {/* Cuenta corriente = gastos de la casa */}
+      <Card className="flex flex-col gap-1 border-amber-300 bg-amber-50/60 p-4">
+        <span className="text-xs text-amber-800">
+          Cuenta corriente — gastos de la casa
+        </span>
+        <span className="text-2xl font-bold tabular-nums text-amber-900">
+          {pesos(Number(metricas?.cuenta_corriente ?? 0))}
+        </span>
+        <span className="text-xs text-amber-800/80">
+          Mercadería que se llevaron sin pagar en el período elegido.
+        </span>
+      </Card>
 
       {/* Medios de pago */}
       <Card className="flex flex-col gap-2 p-4">

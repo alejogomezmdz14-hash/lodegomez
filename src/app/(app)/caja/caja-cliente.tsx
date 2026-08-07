@@ -44,6 +44,7 @@ export function CajaCliente() {
     qr: "",
     tarjeta: "",
     transferencia: "",
+    cuenta_corriente: "",
   });
   const [pesable, setPesable] = useState<Producto | null>(null);
   const [altaCodigo, setAltaCodigo] = useState<string | null>(null);
@@ -295,7 +296,13 @@ export function CajaCliente() {
   function resetPago() {
     setMedio(null);
     setDividido(false);
-    setMontos({ efectivo: "", qr: "", tarjeta: "", transferencia: "" });
+    setMontos({
+      efectivo: "",
+      qr: "",
+      tarjeta: "",
+      transferencia: "",
+      cuenta_corriente: "",
+    });
   }
 
   async function cobrar() {
