@@ -44,12 +44,13 @@ export const GASTOS: {
     label: "Gastos del local",
     ayuda: "Lo que consume el local. Se anota al precio de costo.",
     alCosto: true,
-    pidePersona: true,
+    pidePersona: false,
   },
   {
     valor: "gasto_empleado",
     label: "Gastos empleados",
-    ayuda: "Lo que compra un empleado (lo paga). Se anota al precio de venta.",
+    ayuda:
+      "Lo que se lleva un empleado (lo paga). Se anota al precio de venta, a su nombre.",
     alCosto: false,
     pidePersona: true,
   },

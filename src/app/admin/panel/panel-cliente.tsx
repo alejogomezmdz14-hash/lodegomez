@@ -35,12 +35,6 @@ function rangoRank(p: RankPeriodo): { desde: string | null; hasta: string | null
   return { desde: d.toISOString(), hasta: null };
 }
 
-const GASTO_LABEL: Record<string, string> = {
-  cuenta_corriente: "Casa",
-  gasto_local: "Local",
-  gasto_empleado: "Empleado",
-};
-
 type Preset = "hoy" | "ayer" | "semana" | "mes";
 
 const PRESETS: { id: Preset; label: string }[] = [
@@ -100,6 +94,7 @@ export function PanelCliente() {
   const [mes, setMes] = useState(""); // mes entero (vacío = no usar)
   const [metricas, setMetricas] = useState<MetricasPeriodo | null>(null);
   const [ranking, setRanking] = useState<RankingItem[]>([]);
+  const [rentables, setRentables] = useState<RankingItem[]>([]);
   const [rankPeriodo, setRankPeriodo] = useState<RankPeriodo>("historico");
   const [rankOrden, setRankOrden] = useState<RankOrden>("facturado");
   const [eventos, setEventos] = useState<EventoDueno[]>([]);
@@ -151,16 +146,25 @@ export function PanelCliente() {
   useEffect(() => {
     let cancelado = false;
     const { desde, hasta } = rangoRank(rankPeriodo);
-    supabase
-      .rpc("ranking_productos", {
+    Promise.all([
+      supabase.rpc("ranking_productos", {
         p_desde: desde,
         p_hasta: hasta,
         p_limite: 25,
         p_orden: rankOrden,
-      })
-      .then(({ data }) => {
-        if (!cancelado) setRanking((data as RankingItem[] | null) ?? []);
-      });
+      }),
+      // "Más rentables": ordenado por % de ganancia, no por plata.
+      supabase.rpc("ranking_productos", {
+        p_desde: desde,
+        p_hasta: hasta,
+        p_limite: 15,
+        p_orden: "rentable",
+      }),
+    ]).then(([r, rent]) => {
+      if (cancelado) return;
+      setRanking((r.data as RankingItem[] | null) ?? []);
+      setRentables((rent.data as RankingItem[] | null) ?? []);
+    });
     return () => {
       cancelado = true;
     };
@@ -278,38 +282,42 @@ export function PanelCliente() {
             v={metricas?.gasto_empleado}
           />
         </div>
+        {/* El desglose por persona es solo de empleados: casa y local son una
+            sola cuenta del negocio. */}
         {gastos.length > 0 ? (
-          <div className="overflow-x-auto rounded-lg border border-amber-200 bg-background">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Quién</th>
-                  <th className="px-3 py-2 font-medium">Tipo</th>
-                  <th className="px-3 py-2 text-right font-medium">Veces</th>
-                  <th className="px-3 py-2 text-right font-medium">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gastos.map((g, i) => (
-                  <tr key={i} className="border-b last:border-0">
-                    <td className="px-3 py-2">{g.persona}</td>
-                    <td className="px-3 py-2 text-muted-foreground">
-                      {GASTO_LABEL[g.tipo] ?? g.tipo}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {g.tickets}
-                    </td>
-                    <td className="px-3 py-2 text-right font-medium tabular-nums">
-                      {pesos(Number(g.total))}
-                    </td>
+          <div className="flex flex-col gap-1">
+            <p className="text-xs font-medium text-amber-900">
+              Cuánto se llevó cada empleado
+            </p>
+            <div className="overflow-x-auto rounded-lg border border-amber-200 bg-background">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Empleado</th>
+                    <th className="px-3 py-2 text-right font-medium">Veces</th>
+                    <th className="px-3 py-2 text-right font-medium">Total</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {gastos.map((g, i) => (
+                    <tr key={i} className="border-b last:border-0">
+                      <td className="px-3 py-2">{g.persona}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {g.tickets}
+                      </td>
+                      <td className="px-3 py-2 text-right font-medium tabular-nums">
+                        {pesos(Number(g.total))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : null}
         <span className="text-xs text-amber-800/80">
-          Para ver qué se llevó cada uno, entrá a Ventas y abrí el ticket.
+          Casa y local son una sola cuenta del negocio. Para ver qué se llevó
+          cada uno, entrá a Ventas y abrí el ticket.
         </span>
       </Card>
 
@@ -423,6 +431,69 @@ export function PanelCliente() {
           No incluye lo que sale como gasto (casa, local, empleados). “Margen” es
           lo que le sacás sobre lo facturado; sale “—” si a ese producto todavía
           no le cargaste el costo.
+        </p>
+      </div>
+
+      {/* Más rentables: ordenado por % y no por plata. Responde "de lo que
+          vendo, ¿a qué le saco más?" — un producto puede vender muchísimo y
+          dejar poco (cigarrillos) y otro vender menos y dejar mucho. */}
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-medium">
+          Productos más rentables{" "}
+          <span className="font-normal text-muted-foreground">
+            — a los que más les sacás
+          </span>
+        </p>
+        <div className="overflow-x-auto rounded-xl border">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b text-muted-foreground">
+              <tr>
+                <th className="px-4 py-2 font-medium">#</th>
+                <th className="px-4 py-2 font-medium">Producto</th>
+                <th className="px-4 py-2 text-right font-medium">Margen</th>
+                <th className="px-4 py-2 text-right font-medium">Ganancia</th>
+                <th className="px-4 py-2 text-right font-medium">Cantidad</th>
+                <th className="px-4 py-2 text-right font-medium">Facturado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rentables.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
+                    {cargando
+                      ? "Cargando…"
+                      : "Todavía no hay productos con el costo cargado."}
+                  </td>
+                </tr>
+              ) : (
+                rentables.map((r, i) => (
+                  <tr key={i} className="border-b last:border-0">
+                    <td className="px-4 py-2 tabular-nums text-muted-foreground">
+                      {i + 1}
+                    </td>
+                    <td className="px-4 py-2">{r.descripcion || r.codigo}</td>
+                    <td className="px-4 py-2 text-right text-base font-bold tabular-nums text-primary">
+                      {Number(r.margen_pct)}%
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums">
+                      {pesos(Number(r.margen))}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+                      {cantidadStr(Number(r.unidades))}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+                      {pesos(Number(r.facturado))}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Solo productos con el costo cargado y con movimiento real (5 unidades o
+          más en el período). Un producto puede vender muchísimo y dejarte poco:
+          acá ves a cuáles les sacás más por peso vendido.
         </p>
       </div>
 
