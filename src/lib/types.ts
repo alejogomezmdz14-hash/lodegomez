@@ -229,6 +229,7 @@ export type RankingItem = {
   unidades: number;
   facturado: number;
   margen: number;
+  margen_pct?: number | null;
 };
 
 export type TipoEvento = "anulacion" | "devolucion" | "alerta_precio";

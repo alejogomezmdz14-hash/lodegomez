@@ -17,6 +17,24 @@ import type {
   GastoPorPersona,
 } from "@/lib/types";
 
+// El ranking tiene su propio período: el histórico es el que sirve para decidir
+// qué reponer, más allá de lo que se esté mirando arriba.
+type RankPeriodo = "historico" | "mes" | "semana";
+type RankOrden = "facturado" | "unidades" | "ganancia";
+
+const RANK_PERIODOS: { id: RankPeriodo; label: string }[] = [
+  { id: "historico", label: "Histórico" },
+  { id: "mes", label: "Último mes" },
+  { id: "semana", label: "Última semana" },
+];
+
+function rangoRank(p: RankPeriodo): { desde: string | null; hasta: string | null } {
+  if (p === "historico") return { desde: null, hasta: null };
+  const d = new Date();
+  d.setDate(d.getDate() - (p === "mes" ? 30 : 7));
+  return { desde: d.toISOString(), hasta: null };
+}
+
 const GASTO_LABEL: Record<string, string> = {
   cuenta_corriente: "Casa",
   gasto_local: "Local",
@@ -82,6 +100,8 @@ export function PanelCliente() {
   const [mes, setMes] = useState(""); // mes entero (vacío = no usar)
   const [metricas, setMetricas] = useState<MetricasPeriodo | null>(null);
   const [ranking, setRanking] = useState<RankingItem[]>([]);
+  const [rankPeriodo, setRankPeriodo] = useState<RankPeriodo>("historico");
+  const [rankOrden, setRankOrden] = useState<RankOrden>("facturado");
   const [eventos, setEventos] = useState<EventoDueno[]>([]);
   const [porEmpleado, setPorEmpleado] = useState<VentaPorEmpleado[]>([]);
   const [egresos, setEgresos] = useState<EgresosPeriodo | null>(null);
@@ -98,13 +118,8 @@ export function PanelCliente() {
         : rango(preset);
     (async () => {
       setCargando(true);
-      const [m, r, e, emp, egr, gp] = await Promise.all([
+      const [m, e, emp, egr, gp] = await Promise.all([
         supabase.rpc("metricas_periodo", { p_desde: desde, p_hasta: hasta }),
-        supabase.rpc("ranking_productos", {
-          p_desde: desde,
-          p_hasta: hasta,
-          p_limite: 10,
-        }),
         supabase
           .from("eventos_duenos")
           .select("*")
@@ -115,12 +130,11 @@ export function PanelCliente() {
         supabase.rpc("gastos_por_persona", { p_desde: desde, p_hasta: hasta }),
       ]);
       if (cancelado) return;
-      if (m.error || r.error || e.error || emp.error || egr.error || gp.error) {
+      if (m.error || e.error || emp.error || egr.error || gp.error) {
         setError(true);
       } else {
         setError(false);
         setMetricas((m.data as MetricasPeriodo | null) ?? null);
-        setRanking((r.data as RankingItem[] | null) ?? []);
         setEventos((e.data as EventoDueno[] | null) ?? []);
         setPorEmpleado((emp.data as VentaPorEmpleado[] | null) ?? []);
         setEgresos((egr.data as EgresosPeriodo | null) ?? null);
@@ -132,6 +146,25 @@ export function PanelCliente() {
       cancelado = true;
     };
   }, [preset, dia, mes, supabase]);
+
+  // Ranking: período propio (histórico por defecto) y orden elegible.
+  useEffect(() => {
+    let cancelado = false;
+    const { desde, hasta } = rangoRank(rankPeriodo);
+    supabase
+      .rpc("ranking_productos", {
+        p_desde: desde,
+        p_hasta: hasta,
+        p_limite: 25,
+        p_orden: rankOrden,
+      })
+      .then(({ data }) => {
+        if (!cancelado) setRanking((data as RankingItem[] | null) ?? []);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [rankPeriodo, rankOrden, supabase]);
 
   async function marcarLeido(id: string) {
     setEventos((prev) =>
@@ -313,29 +346,60 @@ export function PanelCliente() {
         </div>
       </Card>
 
-      {/* Ranking */}
+      {/* Ranking de productos: tiene su propio período (el histórico es el que
+          más sirve para decidir qué reponer) y se puede ordenar. */}
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium">Productos más vendidos</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-medium">Ranking de productos</p>
+          <div className="flex flex-wrap items-center gap-1">
+            {RANK_PERIODOS.map((p) => (
+              <Button
+                key={p.id}
+                variant={rankPeriodo === p.id ? "default" : "outline"}
+                size="sm"
+                onClick={() => setRankPeriodo(p.id)}
+              >
+                {p.label}
+              </Button>
+            ))}
+            <span className="mx-1 text-muted-foreground">·</span>
+            <span className="text-xs text-muted-foreground">Ordenar por</span>
+            <select
+              value={rankOrden}
+              onChange={(e) => setRankOrden(e.target.value as RankOrden)}
+              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+            >
+              <option value="facturado">Facturado</option>
+              <option value="unidades">Cantidad</option>
+              <option value="ganancia">Ganancia</option>
+            </select>
+          </div>
+        </div>
         <div className="overflow-x-auto rounded-xl border">
           <table className="w-full text-left text-sm">
             <thead className="border-b text-muted-foreground">
               <tr>
+                <th className="px-4 py-2 font-medium">#</th>
                 <th className="px-4 py-2 font-medium">Producto</th>
                 <th className="px-4 py-2 text-right font-medium">Cantidad</th>
                 <th className="px-4 py-2 text-right font-medium">Facturado</th>
                 <th className="px-4 py-2 text-right font-medium">Ganancia</th>
+                <th className="px-4 py-2 text-right font-medium">Margen</th>
               </tr>
             </thead>
             <tbody>
               {ranking.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">
+                  <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
                     {cargando ? "Cargando…" : "Sin ventas en el período."}
                   </td>
                 </tr>
               ) : (
                 ranking.map((r, i) => (
                   <tr key={i} className="border-b last:border-0">
+                    <td className="px-4 py-2 tabular-nums text-muted-foreground">
+                      {i + 1}
+                    </td>
                     <td className="px-4 py-2">{r.descripcion || r.codigo}</td>
                     <td className="px-4 py-2 text-right tabular-nums">
                       {cantidadStr(Number(r.unidades))}
@@ -343,8 +407,11 @@ export function PanelCliente() {
                     <td className="px-4 py-2 text-right tabular-nums">
                       {pesos(Number(r.facturado))}
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+                    <td className="px-4 py-2 text-right font-medium tabular-nums text-primary">
                       {pesos(Number(r.margen))}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+                      {r.margen_pct == null ? "—" : `${Number(r.margen_pct)}%`}
                     </td>
                   </tr>
                 ))
@@ -352,6 +419,11 @@ export function PanelCliente() {
             </tbody>
           </table>
         </div>
+        <p className="text-xs text-muted-foreground">
+          No incluye lo que sale como gasto (casa, local, empleados). “Margen” es
+          lo que le sacás sobre lo facturado; sale “—” si a ese producto todavía
+          no le cargaste el costo.
+        </p>
       </div>
 
       {/* Ventas por empleado */}
