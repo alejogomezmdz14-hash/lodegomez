@@ -33,6 +33,15 @@ export function FacturaPaso({
   useEffect(() => {
     if (modoA) return;
     function onKey(e: KeyboardEvent) {
+      // Si hay un campo enfocado (p. ej. el diálogo del motivo de anulación
+      // abierto encima), las teclas son de ese campo, no de este panel.
+      const el = document.activeElement;
+      if (
+        el &&
+        ["INPUT", "TEXTAREA", "SELECT"].includes((el as HTMLElement).tagName)
+      ) {
+        return;
+      }
       if (["ArrowLeft", "ArrowUp"].includes(e.key)) {
         e.preventDefault();
         setSel((s) => (s + 2) % 3);

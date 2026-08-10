@@ -27,6 +27,7 @@ import {
   type Pago,
   type MedioPago,
 } from "@/lib/types";
+import { DialogoMotivo } from "@/components/dialogo-motivo";
 import { Ticket } from "../ticket";
 import { FacturaPaso } from "../factura-paso";
 import { TicketFiscal } from "../ticket-fiscal";
@@ -48,6 +49,7 @@ export function VentasCliente({
   const [cargando, setCargando] = useState<string | null>(null);
   const [ticketReimprimir, setTicketReimprimir] = useState<VentaTicket | null>(null);
   const [facturarPanel, setFacturarPanel] = useState<VentaListado | null>(null);
+  const [anulando, setAnulando] = useState<VentaListado | null>(null);
   const [fiscalPrint, setFiscalPrint] = useState<{
     data: ComprobanteImpresion;
     items: TicketItem[];
@@ -126,11 +128,9 @@ export function VentasCliente({
     setFiscalPrint({ data, items: (its as TicketItem[] | null) ?? [] });
   }
 
-  function anular(v: VentaListado) {
-    const motivo = window.prompt(
-      `Anular ticket #${v.ticket_nro} (${pesos(Number(v.total))}).\nMotivo:`,
-    );
-    if (motivo === null) return;
+  function anular(motivo: string) {
+    const v = anulando;
+    if (!v) return;
     startTransition(async () => {
       const res = await anularVenta(v.id, motivo);
       if (!res.ok) {
@@ -140,6 +140,7 @@ export function VentasCliente({
       toast.success(
         `Ticket #${res.ticket_nro} anulado — aviso enviado a los dueños`,
       );
+      setAnulando(null);
       router.refresh();
     });
   }
@@ -378,7 +379,7 @@ export function VentasCliente({
                                 disabled={pending}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  anular(v);
+                                  setAnulando(v);
                                 }}
                               >
                                 Anular
@@ -456,6 +457,20 @@ export function VentasCliente({
           </div>
         </div>
       ) : null}
+
+      <DialogoMotivo
+        key={anulando?.id ?? "sin-anular"}
+        abierto={anulando !== null}
+        titulo={`Anular ticket #${anulando?.ticket_nro ?? ""}`}
+        detalle={
+          anulando
+            ? `${pesos(Number(anulando.total))} · se devuelve el stock y les llega el aviso a los dueños.`
+            : undefined
+        }
+        pendiente={pending}
+        onCerrar={() => setAnulando(null)}
+        onConfirmar={anular}
+      />
 
       <TicketFiscal
         comprobante={fiscalPrint?.data.comprobante ?? null}

@@ -22,6 +22,7 @@ import {
   type VentaTicket,
 } from "@/lib/types";
 import { DialogoGasto } from "./dialogo-gasto";
+import { DialogoMotivo } from "@/components/dialogo-motivo";
 import { Carrito } from "./carrito";
 import { Buscador } from "./buscador";
 import { DialogoPeso } from "./dialogo-peso";
@@ -49,6 +50,7 @@ export function CajaCliente() {
     transferencia: "",
   });
   const [gasto, setGasto] = useState<TipoGasto | null>(null);
+  const [cancelando, setCancelando] = useState(false); // pide el motivo
   const [pesable, setPesable] = useState<Producto | null>(null);
   const [altaCodigo, setAltaCodigo] = useState<string | null>(null);
   const [cobrando, setCobrando] = useState(false);
@@ -537,6 +539,29 @@ export function CajaCliente() {
         }}
       />
 
+      <DialogoMotivo
+        key={cancelando ? "motivo-abierto" : "motivo-cerrado"}
+        abierto={cancelando && postVenta !== null}
+        titulo={`Anular la venta #${postVenta?.ticket_nro ?? ""}`}
+        detalle="Se devuelve el stock y les llega el aviso a los dueños."
+        pendiente={cobrando}
+        onCerrar={() => setCancelando(false)}
+        onConfirmar={async (motivo) => {
+          if (!postVenta) return;
+          setCobrando(true);
+          const res = await anularVenta(postVenta.id, motivo);
+          setCobrando(false);
+          if (!res.ok) {
+            toast.error(res.error);
+            return;
+          }
+          toast.success("Venta anulada — se devolvió el stock");
+          setCancelando(false);
+          setPostVenta(null);
+          foco();
+        }}
+      />
+
       <DialogoGasto
         key={gasto ?? "sin-gasto"}
         tipo={gasto}
@@ -570,17 +595,7 @@ export function CajaCliente() {
           <div className="mx-auto max-w-md">
             <FacturaPaso
               ventaId={postVenta.id}
-              onVolver={async () => {
-                const id = postVenta.id;
-                const res = await anularVenta(id, "Cancelada en el momento");
-                if (!res.ok) {
-                  toast.error(res.error);
-                  return;
-                }
-                toast.success("Venta cancelada — se devolvió el stock");
-                setPostVenta(null);
-                foco();
-              }}
+              onVolver={() => setCancelando(true)}
               onSaltar={() => {
                 setTicket(postVenta); // imprime el ticket común (no fiscal)
                 setPostVenta(null);

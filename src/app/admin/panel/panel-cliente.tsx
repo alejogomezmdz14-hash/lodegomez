@@ -263,7 +263,8 @@ export function PanelCliente() {
       <p className="-mt-3 text-xs text-muted-foreground">
         Ganancia = precio − costo de cada producto vendido. Solo cuenta los que
         tienen el costo cargado (cargalos en Productos para que sea exacta).
-        “Vendido” y “Ganancia” no incluyen la cuenta corriente (ahí no entró plata).
+        “Vendido” y “Ganancia” <strong>no incluyen ningún gasto</strong> —ni la
+        casa, ni el local, ni los empleados—: ahí no entró plata al cajón.
       </p>
 
       {/* Mercadería que salió sin cobrar */}
