@@ -12,13 +12,16 @@ import { imprimirTicket } from "@/lib/imprimir";
 import { NuevoProductoDialog } from "@/components/nuevo-producto-dialog";
 import {
   MEDIOS_COBRO,
+  GASTOS,
   type CartItem,
   type MedioPago,
   type Pago,
   type Producto,
   type TicketItem,
+  type TipoGasto,
   type VentaTicket,
 } from "@/lib/types";
+import { DialogoGasto } from "./dialogo-gasto";
 import { Carrito } from "./carrito";
 import { Buscador } from "./buscador";
 import { DialogoPeso } from "./dialogo-peso";
@@ -39,13 +42,13 @@ export function CajaCliente() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [medio, setMedio] = useState<MedioPago | null>(null);
   const [dividido, setDividido] = useState(false);
-  const [montos, setMontos] = useState<Record<MedioPago, string>>({
+  // Montos del pago dividido, por medio de cobro (no incluye los gastos).
+  const [montos, setMontos] = useState<Record<string, string>>({
     efectivo: "",
-    qr: "",
     tarjeta: "",
     transferencia: "",
-    cuenta_corriente: "",
   });
+  const [gasto, setGasto] = useState<TipoGasto | null>(null);
   const [pesable, setPesable] = useState<Producto | null>(null);
   const [altaCodigo, setAltaCodigo] = useState<string | null>(null);
   const [cobrando, setCobrando] = useState(false);
@@ -108,6 +111,7 @@ export function CajaCliente() {
           cantidad: 1,
           es_pesable: false,
           precio_unit: precio,
+          costo_unit: Number(p.precio_costo ?? 0),
           iva_pct: Number(p.iva_pct ?? 21),
           subtotal: redondear2(precio),
         },
@@ -126,6 +130,7 @@ export function CajaCliente() {
         cantidad: kg,
         es_pesable: true,
         precio_unit: precio,
+        costo_unit: Number(p.precio_costo ?? 0),
         iva_pct: Number(p.iva_pct ?? 21),
         subtotal: redondear2(kg * precio),
       },
@@ -183,7 +188,11 @@ export function CajaCliente() {
       foco();
     },
     {
-      enabled: pesable === null && altaCodigo === null && postVenta === null,
+      enabled:
+        pesable === null &&
+        altaCodigo === null &&
+        postVenta === null &&
+        gasto === null,
       ignore: () => codigoRef.current,
     },
   );
@@ -217,7 +226,7 @@ export function CajaCliente() {
   // tipear montos/buscador (ahí las flechas mueven el cursor normalmente).
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (pesable || altaCodigo || postVenta) return;
+      if (pesable || altaCodigo || postVenta || gasto) return;
       // Solo ← y → (es lo que promete el cartelito). Y solo cuando las flechas
       // no le sirven a un input: si está tipeando en cualquier campo —incluido
       // el de código con algo escrito— las flechas mueven el cursor y NO deben
@@ -257,7 +266,7 @@ export function CajaCliente() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [medio, dividido, pesable, altaCodigo, postVenta]);
+  }, [medio, dividido, pesable, altaCodigo, postVenta, gasto]);
 
   function inc(i: number) {
     setItems((prev) => {
@@ -293,16 +302,43 @@ export function CajaCliente() {
     foco();
   }
 
+  // Registra el carrito como gasto (casa / local / empleado). No entra plata:
+  // el "pago" es del tipo elegido y el total lo calcula el diálogo (al costo
+  // para casa/local). El RPC lo recalcula igual, así que no se puede falsear.
+  async function confirmarGasto(personaId: string | null, total: number) {
+    if (cobrandoRef.current || !gasto) return;
+    if (items.length === 0) return;
+    cobrandoRef.current = true;
+    setTicket(null);
+    setFiscalPrint(null);
+    setCobrando(true);
+    try {
+      const res = await registrarVenta(
+        [{ medio: gasto, monto: total }],
+        items.map((it) => ({ producto_id: it.producto_id, cantidad: it.cantidad })),
+        "principal",
+        personaId,
+      );
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      const cfg = GASTOS.find((g) => g.valor === gasto);
+      toast.success(`${cfg?.label} — ${pesos(res.venta.total)} registrado`);
+      setGasto(null);
+      setItems([]);
+      resetPago();
+      foco();
+    } finally {
+      cobrandoRef.current = false;
+      setCobrando(false);
+    }
+  }
+
   function resetPago() {
     setMedio(null);
     setDividido(false);
-    setMontos({
-      efectivo: "",
-      qr: "",
-      tarjeta: "",
-      transferencia: "",
-      cuenta_corriente: "",
-    });
+    setMontos({ efectivo: "", tarjeta: "", transferencia: "" });
   }
 
   async function cobrar() {
@@ -371,6 +407,30 @@ export function CajaCliente() {
               foco();
             }}
           />
+
+          {/* Mercadería que sale sin cobrar. Va acá abajo porque se usa poco. */}
+          <div className="mt-auto flex flex-col gap-1.5 border-t pt-3">
+            <span className="text-xs font-medium text-muted-foreground">
+              Sin cobrar
+            </span>
+            {GASTOS.map((g) => (
+              <button
+                key={g.valor}
+                type="button"
+                disabled={items.length === 0 || cobrando}
+                onClick={() => setGasto(g.valor)}
+                title={g.ayuda}
+                className="rounded-lg border-2 border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 transition-colors hover:bg-amber-100 disabled:opacity-40"
+              >
+                {g.label}
+              </button>
+            ))}
+            {items.length === 0 ? (
+              <span className="text-[11px] text-muted-foreground">
+                Cargá los productos y después elegí una opción.
+              </span>
+            ) : null}
+          </div>
         </section>
 
         {/* Carrito + cobro */}
@@ -477,6 +537,18 @@ export function CajaCliente() {
         }}
       />
 
+      <DialogoGasto
+        key={gasto ?? "sin-gasto"}
+        tipo={gasto}
+        items={items}
+        pendiente={cobrando}
+        onCerrar={() => {
+          setGasto(null);
+          foco();
+        }}
+        onConfirmar={confirmarGasto}
+      />
+
       <NuevoProductoDialog
         key={altaCodigo ?? "sin-alta"}
         abierto={altaCodigo !== null}
@@ -541,7 +613,7 @@ function Remanente({
   montos,
 }: {
   total: number;
-  montos: Record<MedioPago, string>;
+  montos: Record<string, string>;
 }) {
   const suma = MEDIOS_COBRO.reduce(
     (s, m) => s + (parseNumeroAR(montos[m.valor]) ?? 0),

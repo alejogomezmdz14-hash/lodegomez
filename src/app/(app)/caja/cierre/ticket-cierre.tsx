@@ -51,6 +51,12 @@ export function TicketCierre({
         {Number(data.total_cuenta ?? 0) > 0
           ? fila("Cta. corriente (casa)", pesos(Number(data.total_cuenta)))
           : null}
+        {Number(data.total_gasto_local ?? 0) > 0
+          ? fila("Gastos del local", pesos(Number(data.total_gasto_local)))
+          : null}
+        {Number(data.total_gasto_empleado ?? 0) > 0
+          ? fila("Gastos empleados", pesos(Number(data.total_gasto_empleado)))
+          : null}
         <div className="my-1 border-t border-dashed border-black" />
         {fila(<b>Total vendido</b>, <b>{pesos(Number(data.total))}</b>)}
         {egr > 0 ? fila("Egresos efectivo", `- ${pesos(egr)}`) : null}

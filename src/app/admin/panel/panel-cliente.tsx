@@ -14,7 +14,14 @@ import type {
   TipoEvento,
   VentaPorEmpleado,
   EgresosPeriodo,
+  GastoPorPersona,
 } from "@/lib/types";
+
+const GASTO_LABEL: Record<string, string> = {
+  cuenta_corriente: "Casa",
+  gasto_local: "Local",
+  gasto_empleado: "Empleado",
+};
 
 type Preset = "hoy" | "ayer" | "semana" | "mes";
 
@@ -78,6 +85,7 @@ export function PanelCliente() {
   const [eventos, setEventos] = useState<EventoDueno[]>([]);
   const [porEmpleado, setPorEmpleado] = useState<VentaPorEmpleado[]>([]);
   const [egresos, setEgresos] = useState<EgresosPeriodo | null>(null);
+  const [gastos, setGastos] = useState<GastoPorPersona[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(false);
 
@@ -90,7 +98,7 @@ export function PanelCliente() {
         : rango(preset);
     (async () => {
       setCargando(true);
-      const [m, r, e, emp, egr] = await Promise.all([
+      const [m, r, e, emp, egr, gp] = await Promise.all([
         supabase.rpc("metricas_periodo", { p_desde: desde, p_hasta: hasta }),
         supabase.rpc("ranking_productos", {
           p_desde: desde,
@@ -104,9 +112,10 @@ export function PanelCliente() {
           .limit(30),
         supabase.rpc("ventas_por_empleado", { p_desde: desde, p_hasta: hasta }),
         supabase.rpc("egresos_periodo", { p_desde: desde, p_hasta: hasta }),
+        supabase.rpc("gastos_por_persona", { p_desde: desde, p_hasta: hasta }),
       ]);
       if (cancelado) return;
-      if (m.error || r.error || e.error || emp.error || egr.error) {
+      if (m.error || r.error || e.error || emp.error || egr.error || gp.error) {
         setError(true);
       } else {
         setError(false);
@@ -115,6 +124,7 @@ export function PanelCliente() {
         setEventos((e.data as EventoDueno[] | null) ?? []);
         setPorEmpleado((emp.data as VentaPorEmpleado[] | null) ?? []);
         setEgresos((egr.data as EgresosPeriodo | null) ?? null);
+        setGastos((gp.data as GastoPorPersona[] | null) ?? []);
       }
       setCargando(false);
     })();
@@ -219,16 +229,54 @@ export function PanelCliente() {
         “Vendido” y “Ganancia” no incluyen la cuenta corriente (ahí no entró plata).
       </p>
 
-      {/* Cuenta corriente = gastos de la casa */}
-      <Card className="flex flex-col gap-1 border-amber-300 bg-amber-50/60 p-4">
-        <span className="text-xs text-amber-800">
-          Cuenta corriente — gastos de la casa
-        </span>
-        <span className="text-2xl font-bold tabular-nums text-amber-900">
-          {pesos(Number(metricas?.cuenta_corriente ?? 0))}
-        </span>
+      {/* Mercadería que salió sin cobrar */}
+      <Card className="flex flex-col gap-3 border-amber-300 bg-amber-50/60 p-4">
+        <p className="text-sm font-medium text-amber-900">
+          Mercadería que salió sin cobrar
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <GastoTotal
+            label="Casa (al costo)"
+            v={metricas?.cuenta_corriente}
+          />
+          <GastoTotal label="Local (al costo)" v={metricas?.gasto_local} />
+          <GastoTotal
+            label="Empleados (lo pagan)"
+            v={metricas?.gasto_empleado}
+          />
+        </div>
+        {gastos.length > 0 ? (
+          <div className="overflow-x-auto rounded-lg border border-amber-200 bg-background">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Quién</th>
+                  <th className="px-3 py-2 font-medium">Tipo</th>
+                  <th className="px-3 py-2 text-right font-medium">Veces</th>
+                  <th className="px-3 py-2 text-right font-medium">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gastos.map((g, i) => (
+                  <tr key={i} className="border-b last:border-0">
+                    <td className="px-3 py-2">{g.persona}</td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {GASTO_LABEL[g.tipo] ?? g.tipo}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {g.tickets}
+                    </td>
+                    <td className="px-3 py-2 text-right font-medium tabular-nums">
+                      {pesos(Number(g.total))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
         <span className="text-xs text-amber-800/80">
-          Mercadería que se llevaron sin pagar en el período elegido.
+          Para ver qué se llevó cada uno, entrá a Ventas y abrí el ticket.
         </span>
       </Card>
 
@@ -401,6 +449,17 @@ function Metrica({
         {valor}
       </span>
     </Card>
+  );
+}
+
+function GastoTotal({ label, v }: { label: string; v?: number }) {
+  return (
+    <div className="flex flex-col rounded-lg border border-amber-200 bg-background px-3 py-2">
+      <span className="text-xs text-amber-800">{label}</span>
+      <span className="text-xl font-bold tabular-nums text-amber-900">
+        {pesos(Number(v ?? 0))}
+      </span>
+    </div>
   );
 }
 

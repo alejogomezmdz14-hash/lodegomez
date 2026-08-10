@@ -6,7 +6,9 @@ export type MedioPago =
   | "qr"
   | "tarjeta"
   | "transferencia"
-  | "cuenta_corriente";
+  | "cuenta_corriente"
+  | "gasto_local"
+  | "gasto_empleado";
 export type EstadoVenta = "activa" | "anulada" | "devuelta";
 
 export const MEDIOS_PAGO: { valor: MedioPago; label: string }[] = [
@@ -15,11 +17,55 @@ export const MEDIOS_PAGO: { valor: MedioPago; label: string }[] = [
   { valor: "tarjeta", label: "Tarjeta" },
   { valor: "transferencia", label: "Transferencia" },
   { valor: "cuenta_corriente", label: "Cuenta corriente" },
+  { valor: "gasto_local", label: "Gastos del local" },
+  { valor: "gasto_empleado", label: "Gastos empleados" },
 ];
 
-// Medios ofrecidos al cobrar (sin QR; en su lugar va "Dividir pago").
-// MEDIOS_PAGO se mantiene completo para etiquetar ventas históricas con QR.
-export const MEDIOS_COBRO = MEDIOS_PAGO.filter((m) => m.valor !== "qr");
+// Mercadería que sale sin que entre plata. No son medios de cobro: viven aparte
+// en el POS porque se usan poco.
+export type TipoGasto = "cuenta_corriente" | "gasto_local" | "gasto_empleado";
+
+export const GASTOS: {
+  valor: TipoGasto;
+  label: string;
+  ayuda: string;
+  alCosto: boolean;
+  pidePersona: boolean;
+}[] = [
+  {
+    valor: "cuenta_corriente",
+    label: "Cuenta corriente (casa)",
+    ayuda: "Lo que se lleva la casa. Se anota al precio de costo.",
+    alCosto: true,
+    pidePersona: false,
+  },
+  {
+    valor: "gasto_local",
+    label: "Gastos del local",
+    ayuda: "Lo que consume el local. Se anota al precio de costo.",
+    alCosto: true,
+    pidePersona: true,
+  },
+  {
+    valor: "gasto_empleado",
+    label: "Gastos empleados",
+    ayuda: "Lo que compra un empleado (lo paga). Se anota al precio de venta.",
+    alCosto: false,
+    pidePersona: true,
+  },
+];
+
+// Medios ofrecidos al cobrar: efectivo, tarjeta y transferencia (+ Dividir pago).
+// MEDIOS_PAGO se mantiene completo para etiquetar ventas históricas.
+export const MEDIOS_COBRO = MEDIOS_PAGO.filter(
+  (m) =>
+    m.valor !== "qr" &&
+    m.valor !== "cuenta_corriente" &&
+    m.valor !== "gasto_local" &&
+    m.valor !== "gasto_empleado",
+);
+
+export type EmpleadoSimple = { id: string; nombre: string };
 
 // Columnas exactas de public.productos (migración 0001).
 export type Producto = {
@@ -52,6 +98,7 @@ export type CartItem = {
   cantidad: number;
   es_pesable: boolean;
   precio_unit: number;
+  costo_unit: number; // para valuar los gastos al costo (casa / local)
   iva_pct: number;
   subtotal: number;
 };
@@ -97,6 +144,8 @@ export type ResumenCaja = {
   total_tarjeta: number;
   total_transferencia: number;
   total_cuenta?: number;
+  total_gasto_local?: number;
+  total_gasto_empleado?: number;
   egresos_efectivo?: number;
   egresos_transferencia?: number;
   efectivo_esperado?: number;
@@ -158,9 +207,20 @@ export type MetricasPeriodo = {
   qr: number;
   tarjeta: number;
   transferencia: number;
-  cuenta_corriente?: number; // gastos de la casa (no cuenta como vendido)
+  // Mercadería que salió sin cobrar: no cuentan como vendido ni ganancia.
+  cuenta_corriente?: number; // casa (al costo)
+  gasto_local?: number; // local (al costo)
+  gasto_empleado?: number; // empleados (al precio de venta, lo pagan)
   margen: number;
   anulaciones: number;
+};
+
+// Desglose de gastos por persona (panel).
+export type GastoPorPersona = {
+  persona: string;
+  tipo: TipoGasto;
+  tickets: number;
+  total: number;
 };
 
 export type RankingItem = {
@@ -219,6 +279,8 @@ export type CierreHistorial = {
   total_tarjeta: number;
   total_transferencia: number;
   total_cuenta?: number;
+  total_gasto_local?: number;
+  total_gasto_empleado?: number;
   egresos_efectivo?: number;
   efectivo_contado: number | null;
   diferencia: number | null;

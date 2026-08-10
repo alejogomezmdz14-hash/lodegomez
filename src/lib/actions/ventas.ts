@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import type { ItemVenta, Pago, VentaTicket } from "@/lib/types";
+import type { ItemVenta, Pago, VentaTicket, EmpleadoSimple } from "@/lib/types";
 
 export type ResultadoVenta =
   | { ok: true; venta: VentaTicket }
@@ -13,6 +13,7 @@ export async function registrarVenta(
   pagos: Pago[],
   items: ItemVenta[],
   cajaId = "principal",
+  personaId?: string | null, // a nombre de quién va el gasto (casa/local/empleado)
 ): Promise<ResultadoVenta> {
   if (!items || items.length === 0) {
     return { ok: false, error: "El carrito está vacío." };
@@ -26,12 +27,20 @@ export async function registrarVenta(
     p_pagos: pagos,
     p_items: items,
     p_caja_id: cajaId,
+    p_persona_id: personaId ?? null,
   });
 
   if (error) {
     return { ok: false, error: error.message };
   }
   return { ok: true, venta: data as VentaTicket };
+}
+
+// Nombres de los usuarios, para el selector "¿quién fue?" de los gastos.
+export async function listarEmpleados(): Promise<EmpleadoSimple[]> {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("listar_empleados");
+  return (data as EmpleadoSimple[] | null) ?? [];
 }
 
 export type ResultadoAnular =
