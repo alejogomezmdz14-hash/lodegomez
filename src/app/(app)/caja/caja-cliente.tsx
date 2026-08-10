@@ -229,11 +229,19 @@ export function CajaCliente() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (pesable || altaCodigo || postVenta || gasto) return;
-      // Solo ← y → (es lo que promete el cartelito). Y solo cuando las flechas
-      // no le sirven a un input: si está tipeando en cualquier campo —incluido
-      // el de código con algo escrito— las flechas mueven el cursor y NO deben
-      // cambiar el medio de pago a espaldas del cajero.
-      if (!["ArrowLeft", "ArrowRight"].includes(e.key)) return;
+      // Los botones están en una grilla de 2 columnas: ← → se mueven de a uno
+      // y ↑ ↓ saltan de fila (de a dos). Solo actúan cuando las flechas no le
+      // sirven a un input: si está tipeando en cualquier campo —incluido el de
+      // código con algo escrito— mueven el cursor y NO deben cambiar el medio
+      // de pago a espaldas del cajero.
+      const paso: Record<string, number> = {
+        ArrowRight: 1,
+        ArrowLeft: -1,
+        ArrowDown: 2,
+        ArrowUp: -2,
+      };
+      const dir = paso[e.key];
+      if (dir === undefined) return;
       const el = document.activeElement as HTMLElement | null;
       const enInput =
         !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
@@ -241,7 +249,6 @@ export function CajaCliente() {
         el === codigoRef.current && (codigoRef.current?.value ?? "") === "";
       if (enInput && !codigoVacio) return;
       e.preventDefault();
-      const dir = e.key === "ArrowRight" ? 1 : -1;
       const opciones: (MedioPago | "dividir")[] = [
         ...MEDIOS_COBRO.map((m) => m.valor),
         "dividir",
@@ -523,7 +530,7 @@ export function CajaCliente() {
               {cobrando ? "Cobrando…" : "Cobrar"}
             </Button>
             <p className="text-center text-xs text-muted-foreground">
-              Flechas ← → para elegir el pago · Enter para cobrar
+              Flechas ← → ↑ ↓ para elegir el pago · Enter para cobrar
             </p>
           </div>
         </section>
