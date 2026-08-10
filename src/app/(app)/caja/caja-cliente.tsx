@@ -408,10 +408,10 @@ export function CajaCliente() {
             }}
           />
 
-          {/* Mercadería que sale sin cobrar. Va acá abajo porque se usa poco. */}
+          {/* Mercadería que no se cobra en el momento. Acá abajo: se usa poco. */}
           <div className="mt-auto flex flex-col gap-1.5 border-t pt-3">
             <span className="text-xs font-medium text-muted-foreground">
-              Sin cobrar
+              Gastos
             </span>
             {GASTOS.map((g) => (
               <button

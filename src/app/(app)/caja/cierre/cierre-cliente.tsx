@@ -191,7 +191,7 @@ function CierreCaja({
                   key={l}
                   className="mt-1 flex justify-between text-sm text-amber-700"
                 >
-                  <span>{l} — no entró plata</span>
+                  <span>{l} — no suma al efectivo</span>
                   <span className="tabular-nums">{pesos(Number(v))}</span>
                 </div>
               ) : null,
