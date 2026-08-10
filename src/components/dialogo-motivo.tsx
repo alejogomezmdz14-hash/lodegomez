@@ -52,9 +52,6 @@ export function DialogoMotivo({
             placeholder="Ej: se arrepintió, cobré de más, producto equivocado…"
             className="h-11 text-base"
           />
-          <span className="text-xs text-muted-foreground">
-            Queda registrado y les llega a los dueños.
-          </span>
         </label>
 
         <div className="flex gap-2">

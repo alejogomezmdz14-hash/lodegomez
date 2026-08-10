@@ -28,7 +28,7 @@ export default async function VentasPage({
           <p className="text-sm text-muted-foreground">
             {dia
               ? "Ventas del día elegido."
-              : "Tocá un ticket para ver sus productos. Anular avisa a los dueños y queda registrado."}
+              : "Tocá un ticket para ver sus productos."}
           </p>
         </div>
         <FiltroDia />

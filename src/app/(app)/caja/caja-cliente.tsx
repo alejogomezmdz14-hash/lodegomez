@@ -550,7 +550,7 @@ export function CajaCliente() {
         key={cancelando ? "motivo-abierto" : "motivo-cerrado"}
         abierto={cancelando && postVenta !== null}
         titulo={`Anular la venta #${postVenta?.ticket_nro ?? ""}`}
-        detalle="Se devuelve el stock y les llega el aviso a los dueños."
+        detalle="Se devuelve el stock al inventario."
         pendiente={cobrando}
         onCerrar={() => setCancelando(false)}
         onConfirmar={async (motivo) => {

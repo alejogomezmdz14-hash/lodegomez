@@ -137,9 +137,7 @@ export function VentasCliente({
         toast.error(res.error);
         return;
       }
-      toast.success(
-        `Ticket #${res.ticket_nro} anulado — aviso enviado a los dueños`,
-      );
+      toast.success(`Ticket #${res.ticket_nro} anulado`);
       setAnulando(null);
       router.refresh();
     });
@@ -464,7 +462,7 @@ export function VentasCliente({
         titulo={`Anular ticket #${anulando?.ticket_nro ?? ""}`}
         detalle={
           anulando
-            ? `${pesos(Number(anulando.total))} · se devuelve el stock y les llega el aviso a los dueños.`
+            ? `${pesos(Number(anulando.total))} · se devuelve el stock al inventario.`
             : undefined
         }
         pendiente={pending}
