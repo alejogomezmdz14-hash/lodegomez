@@ -329,3 +329,4 @@ begin
   return v;
 end $$;
 grant execute on function public.gastos_por_persona(timestamptz, timestamptz) to authenticated;
+drop function if exists public.registrar_venta(jsonb, jsonb, text); -- overload viejo: create-or-replace con firma nueva creaba una 2da funcion y la llamada quedaba ambigua
